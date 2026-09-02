@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "YOUR_ANDROID_APP_ID",
         "android_client_info": {
-          "package_name": "io.onda.sample"
+          "package_name": "io.nudgeon.sample"
         }
       },
       "api_key": [

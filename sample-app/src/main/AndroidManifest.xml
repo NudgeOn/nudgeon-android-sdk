@@ -11,7 +11,7 @@
         android:icon="@android:drawable/ic_dialog_info"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OndaSample"
+        android:theme="@style/Theme.NudgeOnSample"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
 
         <activity
@@ -26,12 +26,12 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="onda-sample" android:host="push" />
+                <data android:scheme="nudgeon-sample" android:host="push" />
             </intent-filter>
         </activity>
 
         <!--
-          The SDK's default FirebaseMessagingService only delegates Onda data.
+          The SDK's default FirebaseMessagingService only delegates NudgeOn data.
           This sample-owned service also creates the visible notification and its tap intent.
         -->
         <service

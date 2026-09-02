@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit tests, library AAR, sample APK
-        run: ./gradlew :onda:testDebugUnitTest :onda:assembleRelease :sample-app:assembleDebug --no-daemon
+        run: ./gradlew :nudgeon:testDebugUnitTest :nudgeon:assembleRelease :sample-app:assembleDebug --no-daemon
 
       - name: Upload sample APK
         if: success()

@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- 네임스페이스는 build.gradle.kts(namespace = "io.onda.sdk")에서 지정.
-     POST_NOTIFICATIONS(API 33+)는 호스트 앱이 선언·요청한다.
-     기본 FCM 서비스 등록은 README 참조(자체 FMS 공존 시 위임 API 사용). -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-</manifest>

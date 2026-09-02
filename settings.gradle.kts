@@ -11,6 +11,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "onda-android-sdk"
-include(":onda")
+rootProject.name = "nudgeon-android-sdk"
+include(":nudgeon")
 include(":sample-app")

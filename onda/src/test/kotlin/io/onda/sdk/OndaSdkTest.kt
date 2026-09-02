@@ -32,6 +32,13 @@ class PushPayloadTest {
     @Test fun returnsNullForNonOndaMessage() {
         assertNull(PushPayload.parse(mapOf("title" to "hi"))) // message_id 없음 → 공존
     }
+
+    @Test fun parsesSilentFlag() {
+        val silent = PushPayload.parse(mapOf("message_id" to "m-1", "silent" to "1"))
+        assertEquals(true, silent?.silent) // 무음 푸시 마커
+        val normal = PushPayload.parse(mapOf("message_id" to "m-2", "title" to "t"))
+        assertEquals(false, normal?.silent) // 일반 푸시는 silent=false
+    }
 }
 
 class EventBusTest {

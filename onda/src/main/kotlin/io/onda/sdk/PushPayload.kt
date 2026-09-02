@@ -14,6 +14,8 @@ data class PushPayload(
     val body: String,
     val deepLink: String?,
     val data: Map<String, String>,
+    /** 무음(백그라운드) 푸시 여부 — 서버가 data["silent"]="1"로 표시. 표시·수신 이벤트 생략 대상. */
+    val silent: Boolean = false,
 ) {
     companion object {
         /**
@@ -36,6 +38,7 @@ data class PushPayload(
                 body = data["body"] ?: "",
                 deepLink = data["deep_link"],
                 data = extra,
+                silent = data["silent"] == "1",
             )
         }
     }

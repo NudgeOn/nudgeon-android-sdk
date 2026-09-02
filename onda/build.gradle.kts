@@ -28,6 +28,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.work:work-runtime-ktx:2.9.0") // 백그라운드 플러시 (WorkManager)
     implementation("androidx.core:core-ktx:1.13.1")         // NotificationManagerCompat (권한 상태)
+    implementation("androidx.lifecycle:lifecycle-process:2.8.3") // 앱 포그라운드 관찰 (R-08 권한 재동기화)
     // 기본 FCM 서비스용. compileOnly — 위임 API만 쓰는 앱엔 Firebase 강제 안 함 (PRD-01A 3.2).
     compileOnly("com.google.firebase:firebase-messaging:24.0.0")
 

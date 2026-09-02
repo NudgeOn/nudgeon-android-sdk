@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import java.util.UUID
 
 /**
@@ -23,7 +26,22 @@ object Onda {
             if (core != null) { OndaLog.warn("이미 초기화됨 — 중복 initialize 무시"); return }
             appContext = context.applicationContext
             core = OndaCore(context.applicationContext, config).also { it.start() }
+            observeForeground()
         }
+    }
+
+    /**
+     * 앱 포그라운드 복귀(ProcessLifecycle ON_START)마다 OS 알림 권한 변경을 서버에 재동기화 (R-08).
+     * 사용자가 시스템 설정에서 알림을 끄면 FCM 토큰 값은 그대로라 자동 갱신 계기가 없다 —
+     * 포그라운드마다 현재 권한을 계산해 캐시된 토큰으로 재등록(권한 대사 포함이라 변경 시에만 서버 호출).
+     */
+    private fun observeForeground() {
+        val ctx = appContext ?: return
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                core?.resyncPushPermission(osPermissionString(ctx))
+            }
+        })
     }
 
     @JvmStatic fun identify(externalId: String) { core?.identify(externalId) }

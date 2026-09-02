@@ -89,11 +89,24 @@ internal class OndaCore(
     }
 
     /**
+     * 포그라운드 복귀 시 OS 알림 권한 변경을 서버에 재동기화한다 (R-08).
+     * 캐시된 토큰이 있으면 현재 권한으로 재등록 — 권한이 대사에 포함되므로 변경 시에만 서버 호출.
+     * osPermission은 호출부(Onda, Context 보유)가 계산해 전달.
+     */
+    fun resyncPushPermission(osPermission: String) = work.execute {
+        val token = push.cachedToken ?: return@execute // 등록 이력 없으면 대상 아님
+        push.registerToken(token, identity.externalId, identity.anonId, osPermission)
+    }
+
+    /**
      * 원격 메시지 처리 (기본 FMS·위임 API 공통 진입). Onda 메시지면 true.
      * @param opened true=탭 진입(딥링크 라우팅), false=수신
      */
     fun handleRemoteMessage(data: Map<String, String>, opened: Boolean): Boolean {
         val payload = PushPayload.parse(data) ?: return false
+        // 무음(백그라운드) 푸시: 앱 삭제 감지용 시스템 ping — 표시·수신 이벤트·리스너 통지 없이 소비.
+        // Onda가 처리했으므로 true 반환(호스트 FMS가 기본 알림을 띄우지 않도록).
+        if (payload.silent) return true
         if (opened) {
             track("\$push_opened", pushProps(payload))
             bus.emitOpened(payload)

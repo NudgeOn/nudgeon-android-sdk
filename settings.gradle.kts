@@ -13,3 +13,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "onda-android-sdk"
 include(":onda")
+include(":sample-app")

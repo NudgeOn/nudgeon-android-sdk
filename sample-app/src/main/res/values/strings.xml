@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Onda SDK Sample</string>
+    <string name="title">Onda Android SDK</string>
+    <string name="subtitle">식별 · 이벤트 · 권한 · 토큰 · data-only 푸시 · 딥링크 수명주기 샘플</string>
+    <string name="external_id_hint">external_id (예: sample-user-123)</string>
+    <string name="identify">Identify</string>
+    <string name="set_attributes">Set sample attributes</string>
+    <string name="track_event">Track sample event</string>
+    <string name="flush">Flush</string>
+    <string name="reset">Reset identity</string>
+    <string name="request_permission">Request notification permission</string>
+    <string name="sync_token">Fetch and sync current FCM token</string>
+    <string name="refresh_status">Refresh local SDK status</string>
+    <string name="opt_in">Local opt in</string>
+    <string name="opt_out">Local opt out</string>
+    <string name="push_channel_name">Onda sample messages</string>
+    <string name="log_initial">Activity log</string>
+    <string name="token_label">FCM token (길게 눌러 복사 — 콘솔 테스트 발송에 사용)</string>
+    <string name="token_initial">(아직 조회되지 않음)</string>
+    <string name="status_template">host: %1$s\nkey: %2$s\ndevice_id: %3$s\nanon_id: %4$s\nos_permission: %5$s\nservice_opt_in (local cached): %6$s\ntoken_registered (last confirmed): %7$s\nFirebase: %8$s</string>
+</resources>

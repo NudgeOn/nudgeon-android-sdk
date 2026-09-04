@@ -39,7 +39,7 @@ afterEvaluate {
                 pom {
                     name.set("NudgeOn Android SDK")
                     description.set("Android SDK for the NudgeOn customer engagement platform")
-                    url.set("https://github.com/nudgeon/nudgeon-android-sdk")
+                    url.set("https://github.com/NudgeOn/nudgeon-android-sdk")
                     licenses {
                         license {
                             name.set("The Apache License, Version 2.0")
@@ -55,9 +55,9 @@ afterEvaluate {
                         }
                     }
                     scm {
-                        connection.set("scm:git:https://github.com/nudgeon/nudgeon-android-sdk.git")
-                        developerConnection.set("scm:git:ssh://git@github.com/nudgeon/nudgeon-android-sdk.git")
-                        url.set("https://github.com/nudgeon/nudgeon-android-sdk")
+                        connection.set("scm:git:https://github.com/NudgeOn/nudgeon-android-sdk.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/NudgeOn/nudgeon-android-sdk.git")
+                        url.set("https://github.com/NudgeOn/nudgeon-android-sdk")
                     }
                 }
             }

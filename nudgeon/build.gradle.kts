@@ -2,7 +2,12 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    id("maven-publish")
+    id("signing")
 }
+
+group = "io.nudgeon"
+version = "0.1.0"
 
 android {
     namespace = "io.nudgeon.sdk"
@@ -12,9 +17,69 @@ android {
         minSdk = 26 // Android 8+ (PRD-01A 1.2)
         consumerProguardFiles("consumer-rules.pro")
     }
+    publishing {
+        singleVariant("release") {
+            // Maven Central은 sources·javadoc 아티팩트를 모두 요구한다.
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                artifactId = "nudgeon-sdk"
+                pom {
+                    name.set("NudgeOn Android SDK")
+                    description.set("Android SDK for the NudgeOn customer engagement platform")
+                    url.set("https://github.com/NudgeOn/nudgeon-android-sdk")
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    // Maven Central 검증 필수 항목 — 없으면 배포가 거절된다.
+                    developers {
+                        developer {
+                            id.set("nudgeon")
+                            name.set("NudgeOn")
+                            url.set("https://github.com/NudgeOn")
+                        }
+                    }
+                    scm {
+                        connection.set("scm:git:https://github.com/NudgeOn/nudgeon-android-sdk.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/NudgeOn/nudgeon-android-sdk.git")
+                        url.set("https://github.com/NudgeOn/nudgeon-android-sdk")
+                    }
+                }
+            }
+        }
+
+        repositories {
+            // 로컬 스테이징 — 여기서 만들어진 트리를 zip으로 묶어 Central Portal에 업로드한다.
+            maven {
+                name = "centralStaging"
+                url = uri(layout.buildDirectory.dir("staging-deploy"))
+            }
+        }
+    }
+
+    // 서명은 키가 있을 때만. 키 없이도 build/test/publishToMavenLocal이 깨지지 않아야 한다.
+    signing {
+        val key = providers.environmentVariable("SIGNING_KEY").orNull
+        val pass = providers.environmentVariable("SIGNING_PASSWORD").orNull
+        if (!key.isNullOrBlank()) {
+            useInMemoryPgpKeys(key, pass)
+            sign(publishing.publications["release"])
+        }
     }
 }
 

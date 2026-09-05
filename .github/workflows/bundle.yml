@@ -1,0 +1,102 @@
+name: Central bundle
+
+# Maven Central(Central Portal) 업로드용 번들을 만든다.
+# 서명 키는 저장소 시크릿에만 두고 로컬로 내보내지 않는다.
+# 산출물은 Actions 아티팩트로 받아 Central Portal의 Publish Component에 올린다.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: 서명 · 번들 생성
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 서명 키 존재 확인
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::SIGNING_KEY 시크릿이 없습니다. 서명 없는 번들은 Central이 거부합니다."
+            exit 1
+          fi
+
+      - name: 스테이징 저장소로 발행 (서명 포함)
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ./gradlew :nudgeon:publishReleasePublicationToCentralStagingRepository --no-daemon
+
+      - name: Central 요구사항 검증
+        run: |
+          set -euo pipefail
+          ROOT=nudgeon/build/staging-deploy
+          test -d "$ROOT/io/nudgeon" || { echo "::error::스테이징 산출물이 없습니다"; exit 1; }
+
+          # maven-metadata 는 번들에 포함하면 Central이 거부한다.
+          find "$ROOT" -name 'maven-metadata*' -delete
+
+          DIR=$(find "$ROOT/io/nudgeon" -mindepth 2 -maxdepth 2 -type d | head -1)
+          echo "번들 대상: $DIR"
+          ls -1 "$DIR"
+
+          fail=0
+          for ext in .aar .pom -sources.jar -javadoc.jar; do
+            f=$(ls "$DIR"/*"$ext" 2>/dev/null | grep -v '\.asc$' | head -1 || true)
+            if [ -z "$f" ]; then echo "::error::필수 아티팩트 없음: *$ext"; fail=1; continue; fi
+            for req in .asc .md5 .sha1; do
+              [ -f "${f}${req}" ] || { echo "::error::${f}${req} 없음"; fail=1; }
+            done
+          done
+          [ "$fail" = "0" ] || exit 1
+          echo "필수 아티팩트·서명·체크섬 확인 완료"
+
+      - name: 번들 zip 생성
+        id: zip
+        run: |
+          set -euo pipefail
+          cd nudgeon/build/staging-deploy
+          VER=$(find io/nudgeon -mindepth 2 -maxdepth 2 -type d | head -1 | awk -F/ '{print $NF}')
+          NAME="nudgeon-sdk-${VER}-central-bundle.zip"
+          zip -r "../../../$NAME" io >/dev/null
+          cd ../../..
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          unzip -l "$NAME"
+
+      - name: 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-bundle
+          path: ${{ steps.zip.outputs.name }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 업로드 안내
+        run: |
+          {
+            echo "## Central Portal 업로드"
+            echo
+            echo "1. 위 **central-bundle** 아티팩트를 내려받아 압축을 풉니다 (zip 안에 zip이 들어 있습니다)."
+            echo "2. <https://central.sonatype.com/publishing> → **Publish Component**"
+            echo "3. 입력값:"
+            echo "   - Deployment Name: \`io.nudgeon:nudgeon-sdk:${{ steps.zip.outputs.version }}\`"
+            echo "   - Upload Your File: \`${{ steps.zip.outputs.name }}\`"
+            echo
+            echo "> 게시하면 Maven Central에서 **영구히 삭제할 수 없습니다.**"
+          } >> "$GITHUB_STEP_SUMMARY"

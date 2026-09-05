@@ -1,9 +1,28 @@
 # NudgeOn Android SDK
 
-NudgeOn 고객 인게이지먼트 플랫폼의 Android(Kotlin) 네이티브 코어 SDK.
-공개 인터페이스 명세: `nudgeon-platform/docs/prd/PRD-01A`.
+[![Maven Central](https://img.shields.io/maven-central/v/io.nudgeon/nudgeon-sdk?label=Maven%20Central)](https://central.sonatype.com/artifact/io.nudgeon/nudgeon-sdk)
+[![CI](https://github.com/NudgeOn/nudgeon-android-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/NudgeOn/nudgeon-android-sdk/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)
 
-> 상태: **M2 코어 + 로컬 샘플 앱** — init · identify · track · 오프라인 큐 · reset · 속성 · 푸시 등록 · 리스너(콜드스타트) · 토큰 대사 · FMS 위임 API. iOS SDK와 API 동형.
+[NudgeOn](https://nudgeon.io) 고객 인게이지먼트 플랫폼의 Android(Kotlin) 네이티브 코어 SDK.
+이벤트를 수집하고 푸시를 수신합니다. iOS SDK와 API가 동형입니다.
+
+> ⚠️ **알파입니다. 프로덕션에 쓰지 마세요.**
+> 코어 경로(init · identify · track · 오프라인 큐 · reset · 속성 · 푸시 등록 · 리스너 · 토큰 대사 · FMS 위임)는
+> 동작하지만, 아래가 아직 완료되지 않았습니다.
+>
+> - **`message_id` 연결** — 서버·iOS·Android가 푸시 payload에서 식별자를 읽는 방식이 아직 통일되지 않았습니다. 발송·도달·리포트 간 조인이 보장되지 않습니다
+> - **수신 동의 · 로그아웃 · 토큰 소유권** 서버 동기화 — `reset()`은 현재 로컬 상태만 정리합니다
+> - **실기기 · 실공급자 발송 검증**
+>
+> API와 스키마는 예고 없이 바뀔 수 있습니다. 진행 상황은
+> [출시 체크리스트](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)를 보세요.
+
+- **플랫폼 저장소** — [NudgeOn/nudgeon-platform](https://github.com/NudgeOn/nudgeon-platform)
+- **API 가이드** — [docs-public/API.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/API.md)
+- **푸시 계약** — [docs-public/PUSH-CONTRACT.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/PUSH-CONTRACT.md)
+- **개발자센터** — [nudgeon.io](https://nudgeon.io)
 
 ## 설치 (Maven Central)
 
@@ -48,7 +67,7 @@ val initial = NudgeOn.getInitialPushPayload()
 실제 로컬 수집과 FCM 연결 방법, placeholder 경계는 [`sample-app/README.md`](sample-app/README.md)를
 참조하세요.
 
-## 푸시 통합 (PRD-01A 3.2)
+## 푸시 통합
 
 **기본 경로** — 매니페스트에 서비스 등록 (firebase-messaging 필요):
 
@@ -81,4 +100,12 @@ class MyFms : FirebaseMessagingService() {
 - **M2** ✅ reset·속성·푸시 등록·위임 API·리스너(콜드스타트)·토큰 대사 (현재)
 - **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.0) · 플랫폼 공통 계약 테스트와 실기기 FCM 검증은 후속
 
-Licensed under the [Apache License 2.0](LICENSE).
+## 기여
+
+버그 제보와 PR을 환영합니다. [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+보안 문제는 공개 이슈 대신 `security@nudgeon.io`로 알려주세요.
+
+## 라이선스
+
+[Apache License 2.0](LICENSE). NudgeOn 이름·워드마크·로고는 이 허여 대상이 아닙니다 —
+[상표 정책](TRADEMARKS.md)을 따릅니다.

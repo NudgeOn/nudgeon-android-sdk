@@ -5,11 +5,16 @@ NudgeOn 고객 인게이지먼트 플랫폼의 Android(Kotlin) 네이티브 코�
 
 > 상태: **M2 코어 + 로컬 샘플 앱** — init · identify · track · 오프라인 큐 · reset · 속성 · 푸시 등록 · 리스너(콜드스타트) · 토큰 대사 · FMS 위임 API. iOS SDK와 API 동형.
 
-## 설치 (Maven Central — 예정)
+## 설치 (Maven Central)
 
 ```kotlin
-implementation("io.nudgeon:nudgeon-android:0.1.0")
+dependencies {
+    implementation("io.nudgeon:nudgeon-sdk:0.1.0")
+}
 ```
+
+`mavenCentral()`만 있으면 됩니다. 별도 저장소·인증 설정이 필요 없습니다.
+Android 8(API 26) 이상, JVM 17 타깃입니다.
 
 ## 빠른 시작
 
@@ -74,6 +79,6 @@ class MyFms : FirebaseMessagingService() {
 
 - **M1** ✅ init·identify·track·오프라인 큐
 - **M2** ✅ reset·속성·푸시 등록·위임 API·리스너(콜드스타트)·토큰 대사 (현재)
-- **M4** ✅ 로컬 샘플 앱 · 플랫폼 공통 계약 테스트/실기기 FCM/Maven Central 배포는 후속
+- **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.0) · 플랫폼 공통 계약 테스트와 실기기 FCM 검증은 후속
 
 Licensed under the [Apache License 2.0](LICENSE).

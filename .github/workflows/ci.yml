@@ -29,3 +29,41 @@ jobs:
           name: sample-app-debug
           path: sample-app/build/outputs/apk/debug/sample-app-debug.apk
           if-no-files-found: error
+
+  quickstart:
+    name: Quickstart (게시된 아티팩트 소비)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # samples/quickstart 는 독립 빌드이며 로컬 :nudgeon 모듈을 참조하지 않는다.
+      # Maven Central에 게시된 io.nudgeon:nudgeon-sdk 가 실제로 소비 가능한지 계속 검증한다.
+      - name: 독립 빌드로 조립
+        run: ./gradlew -p samples/quickstart assembleDebug --no-daemon
+
+      - name: SDK가 로컬이 아닌 외부 의존성으로 해석됐는지 확인
+        run: |
+          set -euo pipefail
+          out=$(./gradlew -p samples/quickstart dependencyInsight \
+            --dependency nudgeon-sdk --configuration debugRuntimeClasspath --no-daemon -q)
+          echo "$out"
+          echo "$out" | grep -q "io.nudgeon:nudgeon-sdk" \
+            || { echo "::error::nudgeon-sdk 가 해석되지 않았습니다"; exit 1; }
+          echo "$out" | grep -q "project :" \
+            && { echo "::error::로컬 프로젝트로 치환됐습니다. Maven Central 검증이 무의미해집니다"; exit 1; }
+          echo "외부 의존성으로 해석 확인"
+
+      - name: Upload quickstart APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quickstart-debug
+          path: samples/quickstart/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

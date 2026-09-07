@@ -43,7 +43,7 @@ nudgeon.apiHost=http://192.168.0.10:8080
 
 ## 2. FCM 연결
 
-1. Firebase 프로젝트에 Android 앱 `io.nudgeon.sample`을 등록합니다.
+1. Firebase 프로젝트에 Android 앱 `io.nudgeon.sample`을 등록합니다. 이미 등록된 다른 앱의 `google-services.json`을 쓰려면 그 패키지명으로 applicationId를 덮어씁니다 — `-PnudgeonApplicationId=com.example.app` 또는 루트 `local.properties`의 `nudgeon.applicationId=com.example.app`. 패키지명이 다르면 Google Services plugin이 빌드를 실패시킵니다.
 2. 실제 `google-services.json`을 이 디렉터리에 둡니다. 파일은 Git에서 무시됩니다.
 3. 앱을 다시 빌드합니다. 파일이 있을 때만 Google Services Gradle plugin이 적용됩니다.
 4. 앱을 실행하면 시작 시 FCM token을 조회해 화면 상단 **FCM token** 칸에 전체 값을 표시하고

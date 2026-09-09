@@ -28,7 +28,7 @@
 
 ```kotlin
 dependencies {
-    implementation("io.nudgeon:nudgeon-sdk:0.1.0")
+    implementation("io.nudgeon:nudgeon-sdk:0.1.1")
 }
 ```
 
@@ -101,7 +101,7 @@ class MyFms : FirebaseMessagingService() {
 
 - **M1** ✅ init·identify·track·오프라인 큐
 - **M2** ✅ reset·속성·푸시 등록·위임 API·리스너(콜드스타트)·토큰 대사 (현재)
-- **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.0) · 플랫폼 공통 계약 테스트와 실기기 FCM 검증은 후속
+- **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.1) · 플랫폼 공통 계약 테스트와 실기기 FCM 검증은 후속
 
 ## 기여
 

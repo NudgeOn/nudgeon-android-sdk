@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         externalIdInput = findViewById(R.id.external_id)
 
         findViewById<TextView>(R.id.source_text).text =
-            "의존성: io.nudgeon:nudgeon-sdk:0.1.0 (Maven Central)"
+            "의존성: io.nudgeon:nudgeon-sdk:0.1.1 (Maven Central)"
 
         // 1. 초기화 — Application.onCreate 에서 하는 것이 더 좋다. 예제라 여기서 한다.
         NudgeOn.initialize(

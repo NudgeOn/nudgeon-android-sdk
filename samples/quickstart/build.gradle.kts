@@ -12,7 +12,7 @@ android {
         minSdk = 26          // SDK 요구사항과 동일
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.1.1"
 
         // 실제 값은 -PnudgeonSdkKey / -PnudgeonApiHost 로 넘긴다.
         // 넘기지 않으면 placeholder 로 빌드된다 — 앱은 뜨지만 수집은 되지 않는다.
@@ -38,7 +38,7 @@ kotlin {
 
 dependencies {
     // 핵심 — 로컬 모듈이 아니라 Maven Central에 게시된 아티팩트를 쓴다.
-    implementation("io.nudgeon:nudgeon-sdk:0.1.0")
+    implementation("io.nudgeon:nudgeon-sdk:0.1.1")
 
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

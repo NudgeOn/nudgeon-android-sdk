@@ -10,6 +10,7 @@
     <string name="flush">Flush</string>
     <string name="reset">Reset identity</string>
     <string name="request_permission">Request notification permission</string>
+    <string name="request_permission_via_sdk">Request permission via SDK (registerForPush)</string>
     <string name="sync_token">Fetch and sync current FCM token</string>
     <string name="refresh_status">Refresh local SDK status</string>
     <string name="opt_in">Local opt in</string>

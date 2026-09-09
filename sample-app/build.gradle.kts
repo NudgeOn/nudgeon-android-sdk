@@ -26,13 +26,18 @@ val nudgeonSdkKey = providers.gradleProperty("nudgeonSdkKey")
 val nudgeonApiHost = providers.gradleProperty("nudgeonApiHost")
     .orElse(localProp("nudgeon.apiHost"))
     .orElse("http://10.0.2.2:8080")
+// google-services.json의 package_name과 applicationId가 다르면 빌드가 실패한다.
+// 이미 Firebase에 등록된 앱의 패키지명으로 이 샘플을 설치하려면 여기서 덮어쓴다.
+val nudgeonApplicationId = providers.gradleProperty("nudgeonApplicationId")
+    .orElse(localProp("nudgeon.applicationId"))
+    .orElse("io.nudgeon.sample")
 
 android {
     namespace = "io.nudgeon.sample"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.nudgeon.sample"
+        applicationId = nudgeonApplicationId.get()
         minSdk = 26
         targetSdk = 36
         versionCode = 1

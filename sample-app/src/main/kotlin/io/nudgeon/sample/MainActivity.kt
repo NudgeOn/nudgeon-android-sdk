@@ -92,6 +92,7 @@ class MainActivity : ComponentActivity() {
             appendLog("reset 비동기 요청 — 서버 토큰 분리까지 완료됐다는 의미는 아닙니다")
         }
         findViewById<Button>(R.id.permission_button).setOnClickListener { requestNotificationPermission() }
+        findViewById<Button>(R.id.sdk_permission_button).setOnClickListener { requestPermissionViaSdk() }
         findViewById<Button>(R.id.token_button).setOnClickListener { syncCurrentFcmToken() }
         findViewById<Button>(R.id.refresh_button).setOnClickListener { refreshStatus() }
         findViewById<Button>(R.id.opt_in_button).setOnClickListener {
@@ -124,9 +125,29 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * The other integration style: let the SDK own the dialog. The callback arrives after the user answers
+     * (the SDK detects the requesting Activity resuming behind the system dialog) and the SDK re-reports
+     * os_permission for the registered token. Forwarding onRequestPermissionsResult below makes the
+     * callback immediate and also covers the "don't ask again" state that shows no dialog.
+     */
+    private fun requestPermissionViaSdk() {
+        appendLog("SDK에 권한 요청 위임 — 콜백은 사용자 응답 뒤에 옵니다")
+        NudgeOn.registerForPush(this) { result ->
+            appendLog("registerForPush 콜백(응답 뒤): $result")
+            refreshStatus()
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (NudgeOn.onRequestPermissionsResult(requestCode, permissions, grantResults)) {
+            appendLog("onRequestPermissionsResult를 SDK에 전달")
+        }
+    }
+
+    /**
      * The sample owns the permission dialog through Activity Result, so it calls registerForPush only after
-     * the user's choice is known. Apps that let registerForPush request the permission itself get the
-     * callback after the dialog closes (or immediately when forwarding onRequestPermissionsResult).
+     * the user's choice is known.
      */
     private fun syncSdkPermissionState(granted: Boolean) {
         NudgeOn.registerForPush(if (granted) this else null) { result ->

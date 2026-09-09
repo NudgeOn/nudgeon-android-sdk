@@ -124,8 +124,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * NudgeOn.registerForPush currently reports the state immediately after requestPermissions().
-     * The sample therefore calls it only after Activity Result has delivered the user's choice.
+     * The sample owns the permission dialog through Activity Result, so it calls registerForPush only after
+     * the user's choice is known. Apps that let registerForPush request the permission itself get the
+     * callback after the dialog closes (or immediately when forwarding onRequestPermissionsResult).
      */
     private fun syncSdkPermissionState(granted: Boolean) {
         NudgeOn.registerForPush(if (granted) this else null) { result ->

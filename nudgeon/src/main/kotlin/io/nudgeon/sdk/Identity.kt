@@ -26,16 +26,37 @@ internal class Identity(private val prefs: SharedPreferences) {
         set(v) = prefs.edit().apply { if (v == null) remove(EXTERNAL) else putString(EXTERNAL, v) }.apply()
 
     /**
+     * 서버에 아직 반영되지 않은 identify (external_id, 당시 anon_id) — 앱 재시작 후에도 재시도한다.
+     * IdentifySync가 읽고 쓴다.
+     */
+    val pendingIdentify: IdentifySync.Store = object : IdentifySync.Store {
+        override var pending: Pair<String, String>?
+            get() {
+                val ext = prefs.getString(PENDING_EXT, null) ?: return null
+                val anon = prefs.getString(PENDING_ANON, null) ?: return null
+                return ext to anon
+            }
+            set(v) = prefs.edit().apply {
+                if (v == null) { remove(PENDING_EXT); remove(PENDING_ANON) }
+                else { putString(PENDING_EXT, v.first); putString(PENDING_ANON, v.second) }
+            }.apply()
+    }
+
+    /**
      * reset() — 로그아웃. external 제거 + 새 anon_id. device_id는 유지(설치 단위).
-     * 이전 유저에게 다음 유저 푸시가 가는 사고 방지 (S-4).
+     * 이전 유저에게 다음 유저 푸시가 가는 사고 방지 (S-4). 이전 유저의 미전송 identify도 버린다
+     * (코어가 reset 직전에 마지막 1회 전송을 시도한다) — 새 anon이 그 유저에 묶이지 않는다.
      */
     fun reset() {
-        prefs.edit().remove(EXTERNAL).putString(ANON, UUID.randomUUID().toString()).apply()
+        prefs.edit().remove(EXTERNAL).remove(PENDING_EXT).remove(PENDING_ANON)
+            .putString(ANON, UUID.randomUUID().toString()).apply()
     }
 
     private companion object {
         const val ANON = "nudgeon.anon_id"
         const val DEVICE = "nudgeon.device_id"
         const val EXTERNAL = "nudgeon.external_id"
+        const val PENDING_EXT = "nudgeon.identify_pending.external_id"
+        const val PENDING_ANON = "nudgeon.identify_pending.anon_id"
     }
 }

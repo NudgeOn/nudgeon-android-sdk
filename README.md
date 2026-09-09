@@ -52,8 +52,11 @@ NudgeOn.onPushOpened { payload -> router.route(payload.deepLink) } // 콜드 스
 val initial = NudgeOn.getInitialPushPayload()
 ```
 
-> Android 13+에서 현재 `registerForPush` 콜백은 권한 요청 직후 상태를 반환합니다. 사용자 선택 완료,
-> 현재 FCM token 조회·전달, data-only 알림 표시는 아래 샘플 앱의 Activity Result/FMS 연동을 참고하세요.
+> Android 13+에서 `registerForPush` 콜백은 **사용자가 권한 다이얼로그에 응답한 뒤** 최종 상태로 호출되며,
+> 그 시점에 서버의 os_permission도 재동기화됩니다(등록된 토큰이 있을 때). 응답 감지는 요청한 Activity의
+> resume으로 자동 처리되지만, "다시 묻지 않음" 상태처럼 다이얼로그 없이 즉시 거부되는 경우까지 잡으려면
+> Activity의 `onRequestPermissionsResult`에서 `NudgeOn.onRequestPermissionsResult(requestCode, permissions,
+> grantResults)`를 전달하세요. 현재 FCM token 조회·전달, data-only 알림 표시는 샘플 앱을 참고하세요.
 
 ## 샘플 앱
 

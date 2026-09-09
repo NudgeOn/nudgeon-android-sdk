@@ -29,6 +29,11 @@ internal class NudgeOnCore(
     private val work = Executors.newSingleThreadExecutor()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     @Volatile private var flushing = false
+    private val identifySync = IdentifySync(
+        store = identity.pendingIdentify,
+        send = { ext, anon, done -> network.sendIdentify(ext, anon, emptyMap(), done) },
+        onWorker = { r -> work.execute(r) },
+    )
 
     val anonId: String get() = identity.anonId
     val deviceId: String get() = identity.deviceId
@@ -39,19 +44,21 @@ internal class NudgeOnCore(
         scheduler.scheduleWithFixedDelay(
             { flushSync() }, config.flushIntervalSeconds, config.flushIntervalSeconds, TimeUnit.SECONDS,
         )
-        flush() // 이전 세션 잔존분 즉시 전송 시도
+        flush() // 이전 세션 잔존분(이벤트·미전송 identify) 즉시 전송 시도
     }
 
+    /**
+     * 식별. 서버 반영 전에는 pending 마커를 영속해 두고, 실패하면 다음 flush(타이머·포그라운드·앱 재시작)에서
+     * 같은 (external_id, anon_id)로 재전송한다 (IdentifySync).
+     */
     fun identify(externalId: String) = work.execute {
         identity.externalId = externalId
-        network.sendIdentify(externalId, identity.anonId, emptyMap()) { ok ->
-            NudgeOnLog.info("identify ${if (ok) "성공" else "재시도 대기"}")
-        }
+        identifySync.identify(externalId, identity.anonId)
     }
 
     fun reset() = work.execute {
-        flushSync() // 이전 유저 이벤트를 먼저 비운다
-        identity.reset()
+        flushSync() // 이전 유저 이벤트(와 미전송 identify)를 먼저 비운다 — 마지막 1회 시도
+        identity.reset() // 이전 유저의 pending identify는 여기서 버린다(새 anon을 그 유저에 묶지 않는다)
         push.clearTokenCache() // 다음 토큰을 새 유저로 재등록 (S-4)
         NudgeOnLog.info("reset 완료 — 새 anon_id 발급")
     }
@@ -126,6 +133,7 @@ internal class NudgeOnCore(
     // MARK: 내부
 
     private fun flushSync() {
+        identifySync.sendPending() // 실패했던 identify를 이벤트보다 먼저 — 귀속이 먼저 서버에 닿게
         if (flushing) return
         val batch = queue.peek(config.flushBatchSize)
         if (batch.isEmpty()) return

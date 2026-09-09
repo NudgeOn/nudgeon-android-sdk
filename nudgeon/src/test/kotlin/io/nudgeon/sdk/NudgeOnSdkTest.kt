@@ -158,3 +158,69 @@ class PermissionRequestTrackerTest {
         assertEquals(listOf("first:DENIED", "second:DENIED"), got)
     }
 }
+
+/** identify 재시도 (M-1 실단말 결함: 실패가 로그만 남기고 유실). iOS IdentifyRetryTests와 대칭. */
+class IdentifySyncTest {
+    private class MemStore : IdentifySync.Store { override var pending: Pair<String, String>? = null }
+    private class FakeSender {
+        val sent = mutableListOf<Pair<String, String>>()
+        val statuses = ArrayDeque<Boolean>() // 순서대로 소비, 비면 성공
+        var held: ((Boolean) -> Unit)? = null // hold=true면 완료를 보류
+        var hold = false
+        fun send(ext: String, anon: String, done: (Boolean) -> Unit) {
+            sent.add(ext to anon)
+            if (hold) held = done else done(statuses.removeFirstOrNull() ?: true)
+        }
+    }
+    private fun make(store: MemStore = MemStore()): Triple<IdentifySync, FakeSender, MemStore> {
+        val sender = FakeSender()
+        return Triple(IdentifySync(store, sender::send) { it.run() }, sender, store)
+    }
+
+    @Test fun failedIdentifyRetriedOnNextFlushWithSameAnon() {
+        val (sync, sender, store) = make()
+        sender.statuses.add(false)
+        sync.identify("user-1", "anon-a")
+        assertEquals("user-1" to "anon-a", store.pending) // 실패분은 pending으로 남는다
+        sync.sendPending() // 다음 flush
+        assertEquals(listOf("user-1" to "anon-a", "user-1" to "anon-a"), sender.sent)
+        assertNull(store.pending)
+        sync.sendPending() // 성공 후에는 보내지 않는다
+        assertEquals(2, sender.sent.size)
+    }
+
+    @Test fun pendingSurvivesRestart() {
+        val store = MemStore()
+        val (first, s1, _) = make(store)
+        s1.statuses.add(false)
+        first.identify("user-2", "anon-b")
+        val (restarted, s2, _) = make(store) // 같은 저장소로 새 코어
+        restarted.sendPending() // start()의 첫 flush
+        assertEquals(listOf("user-2" to "anon-b"), s2.sent)
+        assertNull(store.pending)
+    }
+
+    @Test fun inflightIsNotDuplicatedAndNewerUserFollows() {
+        val (sync, sender, store) = make()
+        sender.hold = true
+        sync.identify("user-a", "anon-c")
+        sync.sendPending() // 전송 중 flush — 중복 없음
+        assertEquals(1, sender.sent.size)
+        sync.identify("user-b", "anon-c") // 전송 중 유저 변경 — 마커만 교체
+        assertEquals(1, sender.sent.size)
+        sender.hold = false
+        sender.held!!(true) // 첫 전송 성공 → 마커가 다르므로 지우지 않고 이어서 전송
+        assertEquals(listOf("user-a" to "anon-c", "user-b" to "anon-c"), sender.sent)
+        assertNull(store.pending)
+    }
+
+    @Test fun dropDiscardsPendingAfterReset() {
+        val (sync, sender, store) = make()
+        sender.statuses.add(false)
+        sync.identify("user-3", "anon-d")
+        sync.drop()
+        sync.sendPending()
+        assertNull(store.pending)
+        assertEquals(1, sender.sent.size)
+    }
+}

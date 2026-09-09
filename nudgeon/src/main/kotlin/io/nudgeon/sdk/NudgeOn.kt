@@ -43,6 +43,7 @@ object NudgeOn {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 core?.resyncPushPermission(osPermissionString(ctx))
+                core?.flush() // 미전송 identify·이벤트 재시도
             }
         })
     }
@@ -177,6 +178,11 @@ object NudgeOn {
 }
 
 internal object NudgeOnLog {
-    fun warn(msg: String) { android.util.Log.w("NudgeOn", msg) }
-    fun info(msg: String) { android.util.Log.i("NudgeOn", msg) }
+    fun warn(msg: String) = safely { android.util.Log.w("NudgeOn", msg) }
+    fun info(msg: String) = safely { android.util.Log.i("NudgeOn", msg) }
+
+    /** JVM 단위 테스트에서는 android.util.Log가 스텁("not mocked")이라 로그를 버린다. */
+    private inline fun safely(block: () -> Unit) {
+        try { block() } catch (_: RuntimeException) { }
+    }
 }

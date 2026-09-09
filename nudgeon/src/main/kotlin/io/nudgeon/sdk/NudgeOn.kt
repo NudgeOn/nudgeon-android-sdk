@@ -1,6 +1,7 @@
 package io.nudgeon.sdk
 
 import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -18,6 +19,7 @@ object NudgeOn {
     @Volatile
     private var core: NudgeOnCore? = null
     private var appContext: Context? = null
+    private val permissionRequest = PermissionRequestTracker() // synchronized(this)로 보호
 
     /** 초기화 (PRD-01A 2.1). initialize 이전 호출은 코어 내부 큐에 보관 후 순서 실행. */
     @JvmStatic
@@ -27,6 +29,7 @@ object NudgeOn {
             appContext = context.applicationContext
             core = NudgeOnCore(context.applicationContext, config).also { it.start() }
             observeForeground()
+            observeActivityResume()
         }
     }
 
@@ -56,17 +59,66 @@ object NudgeOn {
     // MARK: 푸시 (PRD-01A 2.4, 3.2)
 
     /**
-     * 알림 권한 확인/요청 (API 33+ POST_NOTIFICATIONS). 이미 허용이면 GRANTED 즉시 콜백,
-     * 아니면 activity로 권한 요청 후 현재 상태를 콜백(결과는 앱의 onRequestPermissionsResult에서 재확인).
+     * 알림 권한 확인/요청 (API 33+ POST_NOTIFICATIONS). 이미 허용이면 GRANTED 즉시 콜백.
+     * 아니면 activity로 권한을 요청하고 **사용자 응답이 도착한 뒤** 최종 상태를 콜백한다 — 동시에
+     * 서버의 os_permission을 재동기화한다(등록된 토큰이 있을 때). 응답 감지는 두 경로 중 먼저 온 쪽:
+     *  - 앱이 [onRequestPermissionsResult]를 전달 (권장)
+     *  - 요청한 Activity가 시스템 다이얼로그에 가려졌다가(pause) 다시 resume됨 (앱 코드 변경 없이 동작)
+     * API 33 미만 또는 activity가 null이면 요청 없이 현재 상태를 즉시 콜백한다.
      */
     @JvmStatic
     fun registerForPush(activity: Activity?, callback: (PushPermissionResult) -> Unit) {
         val ctx = appContext ?: run { callback(PushPermissionResult.DENIED); return }
         if (osPermissionGranted(ctx)) { callback(PushPermissionResult.GRANTED); return }
         if (Build.VERSION.SDK_INT >= 33 && activity != null) {
+            synchronized(this) { permissionRequest.begin(System.identityHashCode(activity), callback) }
             activity.requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), REQ_PUSH)
+            return
         }
-        callback(if (osPermissionGranted(ctx)) PushPermissionResult.GRANTED else PushPermissionResult.DENIED)
+        callback(PushPermissionResult.DENIED)
+    }
+
+    /**
+     * Activity.onRequestPermissionsResult에서 전달하면 [registerForPush] 콜백을 즉시 완료하고 서버 권한을
+     * 재동기화한다. NudgeOn의 요청이 아니면 false를 돌려주고 아무것도 하지 않는다.
+     * 전달하지 않아도 Activity resume 시점에 같은 처리가 일어난다(다이얼로그 없이 즉시 거부되는
+     * "다시 묻지 않음" 상태만 resume 신호가 없어 다음 resume까지 늦어진다).
+     */
+    @JvmStatic
+    fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray): Boolean {
+        if (requestCode != REQ_PUSH) return false
+        val cb = synchronized(this) { permissionRequest.onResult() } ?: return true
+        completePermissionRequest(cb)
+        return true
+    }
+
+    /** 대기 중 요청 완료: 현재 OS 권한을 계산해 서버 재동기화 + 콜백. */
+    private fun completePermissionRequest(callback: (PushPermissionResult) -> Unit) {
+        val ctx = appContext ?: run { callback(PushPermissionResult.DENIED); return }
+        val granted = osPermissionGranted(ctx)
+        core?.resyncPushPermission(if (granted) "authorized" else "denied")
+        callback(if (granted) PushPermissionResult.GRANTED else PushPermissionResult.DENIED)
+    }
+
+    /** 요청한 Activity가 시스템 권한 다이얼로그 뒤에 resume되면 대기 중인 요청을 완료한다. */
+    private fun observeActivityResume() {
+        val app = appContext as? Application ?: return
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) {
+                val cb = synchronized(this@NudgeOn) {
+                    permissionRequest.onResumed(System.identityHashCode(activity))
+                } ?: return
+                completePermissionRequest(cb)
+            }
+            override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
+            override fun onActivityStarted(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {
+                synchronized(this@NudgeOn) { permissionRequest.onPaused(System.identityHashCode(activity)) }
+            }
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
     }
 
     /** FCM 토큰 등록 진입점 (NudgeOnFirebaseMessagingService.onNewToken 또는 앱이 직접 호출). */

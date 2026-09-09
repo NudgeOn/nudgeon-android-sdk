@@ -100,6 +100,12 @@
             android:text="@string/request_permission" />
 
         <Button
+            android:id="@+id/sdk_permission_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/request_permission_via_sdk" />
+
+        <Button
             android:id="@+id/token_button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

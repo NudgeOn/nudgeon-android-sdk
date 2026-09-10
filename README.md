@@ -91,6 +91,27 @@ class MyFms : FirebaseMessagingService() {
 }
 ```
 
+**알림 표시** — NudgeOn 푸시는 data-only라 OS가 알림을 만들지 않고 **SDK가 그린다**(0.1.2+, 기본값). 제목·본문,
+`image_url`이 있으면 큰 그림, 탭하면 앱 런처 액티비티가 열린다. 채널 이름·아이콘은 `NudgeOnConfig`로 바꾼다:
+
+```kotlin
+NudgeOn.initialize(this, NudgeOnConfig(
+    sdkKey = "pk_…", apiHost = "https://…",
+    notificationChannelName = "알림",          // 시스템 설정에 보이는 채널 이름
+    notificationSmallIcon = R.drawable.ic_stat, // 0이면 앱 아이콘
+    // autoDisplayNotifications = false        // 앱이 직접 그릴 때 — onPushReceived 리스너에서 표시
+))
+```
+
+탭으로 열린 액티비티에서는 Intent를 SDK에 넘겨 `$push_opened`와 `onPushOpened` 리스너(딥링크 라우팅)로 잇는다:
+
+```kotlin
+override fun onCreate(savedInstanceState: Bundle?) { …; NudgeOn.handleLaunchIntent(intent) }
+override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); NudgeOn.handleLaunchIntent(intent) }
+```
+
+페이로드 필드와 무음 푸시 규칙은 플랫폼 저장소의 [PUSH-CONTRACT.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/PUSH-CONTRACT.md)를 따른다.
+
 ## 아키텍처 (iOS와 대칭)
 
 - 코어가 유일한 상태 보유자: SharedPreferences 식별자 영속, 파일 오프라인 큐(1000건 상한),
@@ -101,7 +122,8 @@ class MyFms : FirebaseMessagingService() {
 
 - **M1** ✅ init·identify·track·오프라인 큐
 - **M2** ✅ reset·속성·푸시 등록·위임 API·리스너(콜드스타트)·토큰 대사 (현재)
-- **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.0) · 플랫폼 공통 계약 테스트와 실기기 FCM 검증은 후속
+- **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.0) · 실기기 FCM 수신(0.1.0, 2026-09-07)
+- **0.1.1** 같은 message_id 재수신 접기 · **0.1.2** SDK 알림 표시(BigPicture)·`imageUrl`·`handleLaunchIntent`
 
 ## 기여
 

@@ -103,6 +103,18 @@ class MainActivity : ComponentActivity() {
             NudgeOn.setPushSubscription(false)
             appendLog("서비스 푸시 수신 동의 비동기 요청: false (현재 SDK 로컬 상태)")
         }
+        // FCM 없이 SDK 자동 표시 경로를 그대로 태운다 (계약 data 키 그대로, message_id는 매번 새로).
+        findViewById<Button>(R.id.preview_button).setOnClickListener {
+            val data = mapOf(
+                "message_id" to UUID.randomUUID().toString(),
+                "journey_id" to "preview-journey",
+                "title" to "NudgeOn 미리보기", "body" to "SDK가 직접 그린 알림입니다 — 탭하면 딥링크로 이동합니다.",
+                "deep_link" to "nudgeon-sample://home",
+                "image_url" to "https://picsum.photos/seed/nudgeon/600/300",
+                "data" to """{"k":"v"}""",
+            )
+            appendLog("미리보기 handleRemoteMessage → ${NudgeOn.handleRemoteMessage(data)}")
+        }
     }
 
     private fun registerPushListeners() {
@@ -174,17 +186,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleLaunchIntent(intent: Intent) {
-        val extras = intent.extras
-        val pushData = if (extras == null) {
-            emptyMap()
-        } else {
-            PushIntentData.from(extras.keySet().associateWith { key -> extras.getString(key) })
-        }
-
-        if (pushData.isNotEmpty() && NudgeOn.handlePushOpened(pushData)) {
-            // Consume the one-shot data so this same Intent cannot emit another $push_opened.
-            pushData.keys.forEach(intent::removeExtra)
-            appendLog("알림 탭을 NudgeOn.handlePushOpened로 전달")
+        // SDK 자동 표시 알림의 탭 — extras를 일회성으로 소비하고 $push_opened·onPushOpened 리스너로 잇는다.
+        if (NudgeOn.handleLaunchIntent(intent)) {
+            appendLog("알림 탭을 NudgeOn.handleLaunchIntent로 전달")
             return
         }
 

@@ -125,6 +125,13 @@ override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(
 - **M4** ✅ 로컬 샘플 앱 · Maven Central 배포(0.1.0) · 실기기 FCM 수신(0.1.0, 2026-09-07)
 - **0.1.1** 같은 message_id 재수신 접기 · **0.1.2** SDK 알림 표시(BigPicture)·`imageUrl`·`handleLaunchIntent`
 
+## 게시 (메인테이너)
+
+1. `CHANGELOG.md`·`nudgeon/build.gradle.kts`의 `version`을 올리고 머지한다.
+2. 태그 `X.Y.Z`를 푸시하면 **Central bundle** 워크플로가 서명된 번들을 만든다 → GitHub Release에 첨부한다.
+3. **Publish to Maven Central** 워크플로를 `version=X.Y.Z`로 실행한다 (시크릿 `CENTRAL_USERNAME`/`CENTRAL_PASSWORD` = Central Portal User Token). 로컬에서는 `CENTRAL_USERNAME=… CENTRAL_PASSWORD=… scripts/central-publish.sh X.Y.Z`.
+4. `repo1.maven.org`에 보이면 README·quickstart 좌표 PR을 머지한다.
+
 ## 기여
 
 버그 제보와 PR을 환영합니다. [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.

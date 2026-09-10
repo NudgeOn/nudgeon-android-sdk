@@ -1,0 +1,44 @@
+name: Publish to Maven Central
+
+# Release에 첨부된 Central 번들을 Central Portal Publisher API로 올린다 (publishingType=AUTOMATIC:
+# 검증 통과 시 자동 게시). 시크릿 CENTRAL_USERNAME / CENTRAL_PASSWORD = central.sonatype.com →
+# View Account → Generate User Token 의 username/password.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "게시할 버전 (Release 태그, 예 0.1.2)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Central Portal 업로드 · 게시 대기
+    runs-on: ubuntu-latest
+    steps:
+      - name: 자격증명 확인
+        env:
+          U: ${{ secrets.CENTRAL_USERNAME }}
+          P: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          if [ -z "$U" ] || [ -z "$P" ]; then
+            echo "::error::CENTRAL_USERNAME / CENTRAL_PASSWORD 시크릿이 없습니다 — central.sonatype.com → View Account → Generate User Token"
+            exit 1
+          fi
+
+      - name: 번들 내려받기 (Release 첨부)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ inputs.version }}
+        run: gh release download "$VER" -R "$GITHUB_REPOSITORY" -p "nudgeon-sdk-${VER}-central-bundle.zip"
+
+      - name: 업로드 · 게시 대기
+        env:
+          U: ${{ secrets.CENTRAL_USERNAME }}
+          P: ${{ secrets.CENTRAL_PASSWORD }}
+          VER: ${{ inputs.version }}
+        run: |
+          chmod +x scripts/central-publish.sh 2>/dev/null || true
+          CENTRAL_USERNAME="$U" CENTRAL_PASSWORD="$P" bash scripts/central-publish.sh "$VER" "nudgeon-sdk-${VER}-central-bundle.zip"

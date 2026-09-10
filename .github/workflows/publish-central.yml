@@ -18,6 +18,8 @@ jobs:
     name: Central Portal 업로드 · 게시 대기
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4 # scripts/central-publish.sh
+
       - name: 자격증명 확인
         env:
           U: ${{ secrets.CENTRAL_USERNAME }}

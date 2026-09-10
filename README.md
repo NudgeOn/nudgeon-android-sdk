@@ -28,7 +28,7 @@
 
 ```kotlin
 dependencies {
-    implementation("io.nudgeon:nudgeon-sdk:0.1.0")
+    implementation("io.nudgeon:nudgeon-sdk:0.1.2")
 }
 ```
 

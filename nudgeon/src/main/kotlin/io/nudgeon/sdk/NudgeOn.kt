@@ -152,6 +152,20 @@ object NudgeOn {
     fun handlePushOpened(data: Map<String, String>): Boolean =
         core?.handleRemoteMessage(data, opened = true) ?: false
 
+    /**
+     * 자동 표시 알림을 탭해 열린 액티비티의 Intent를 넘긴다 (onCreate·onNewIntent 양쪽).
+     * NudgeOn 푸시 탭이면 `$push_opened`·`onPushOpened` 리스너로 잇고 extras를 비워(일회성) true를 돌려준다.
+     * 앱이 직접 알림을 그리는 경우엔 그 Intent에 실은 data로 [handlePushOpened]를 호출한다.
+     */
+    @JvmStatic
+    fun handleLaunchIntent(intent: android.content.Intent?): Boolean {
+        val extras = intent?.extras ?: return false
+        if (extras.getString(PushNotifications.EXTRA_MARKER) != "1") return false
+        val data = extras.keySet().mapNotNull { k -> extras.getString(k)?.let { k to it } }.toMap()
+        extras.keySet().toList().forEach(intent::removeExtra)
+        return handlePushOpened(data)
+    }
+
     // MARK: 리스너 (PRD-01A 2.5) — 콜드 스타트 유실 없이 전달
 
     @JvmStatic fun onPushOpened(handler: (PushPayload) -> Unit): UUID? = core?.bus?.onPushOpened(handler)

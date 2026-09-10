@@ -1,9 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 — 2026-09-10
+
+푸시 페이로드 공통 계약([PUSH-CONTRACT.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/PUSH-CONTRACT.md)) 대조에서 드러난 어긋남을 닫는다. 0.1.1은 Central에 게시되지 않았으므로 이 버전이 0.1.0 다음 첫 게시본이다.
+
+### 추가
+- **SDK가 알림을 그린다** (`NudgeOnConfig.autoDisplayNotifications`, 기본 true). NudgeOn 푸시는 data-only라 OS가 알림을 만들지 않는데, 지금까지는 앱이 직접 `Notification.Builder`를 써야 했다(문서는 "자동 표시"라고 적혀 있었다). 제목·본문, `image_url`이 있으면 BigPicture, 탭하면 앱 런처 액티비티가 열린다. 채널 id/이름·small icon은 config로 지정. 앱이 직접 그리던 경우 **false로 두지 않으면 알림이 두 번 뜬다.**
+- **`NudgeOn.handleLaunchIntent(intent)`**: 자동 표시 알림의 탭 Intent를 넘기면 `$push_opened`·`onPushOpened`로 잇고 extras를 일회성으로 비운다.
+- **`PushPayload.imageUrl`** (`image_url`). 그동안 서버가 보내도 버렸다.
 
 ### 고침
 - **같은 message_id의 재수신을 접는다.** 서버 채널 워커는 at-least-once라 공급자 전송 직후 죽으면 같은 메시지가 한 번 더 올 수 있다(플랫폼 M-4 카오스, 3,000건 중 1건). FCM에는 접기 수단이 없어 단말에서 최근 256개 message_id를 기억하고 두 번째 수신은 이벤트도 리스너도 내지 않는다. 탭(`$push_opened`)은 접지 않는다.
+
+### 샘플
+- `sample-app`: 자체 알림 코드를 지우고 SDK 표시에 위임. FCM 없이 표시 경로를 태우는 "Preview SDK notification" 버튼.
 
 ## 0.1.1 — 2026-09-10
 

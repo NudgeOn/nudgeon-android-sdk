@@ -4,7 +4,8 @@ import org.json.JSONObject
 
 /**
  * 푸시 페이로드 (PRD-01A 2.5). FCM data 메시지(Map<String,String>) → 구조화. iOS PushPayload와 대칭.
- * NudgeOn 발송 규약(data 키): message_id, campaign_id?, journey_id?, title, body, deep_link?, data?(JSON 문자열).
+ * NudgeOn 발송 규약(data 키, docs-public/PUSH-CONTRACT.md): message_id, journey_id?, campaign_id?(예약), title, body,
+ * deep_link?, image_url?, data?(JSON 문자열), silent?("1").
  */
 data class PushPayload(
     val messageId: String,
@@ -16,6 +17,8 @@ data class PushPayload(
     val data: Map<String, String>,
     /** 무음(백그라운드) 푸시 여부 — 서버가 data["silent"]="1"로 표시. 표시·수신 이벤트 생략 대상. */
     val silent: Boolean = false,
+    /** 리치 알림 이미지 URL (`image_url`). 자동 표시 시 BigPicture로 그린다. */
+    val imageUrl: String? = null,
 ) {
     companion object {
         /**
@@ -39,6 +42,7 @@ data class PushPayload(
                 deepLink = data["deep_link"],
                 data = extra,
                 silent = data["silent"] == "1",
+                imageUrl = data["image_url"],
             )
         }
     }

@@ -19,6 +19,7 @@ internal class NudgeOnCore(
     context: Context,
     private val config: NudgeOnConfig,
 ) {
+    private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("nudgeon", Context.MODE_PRIVATE)
     private val identity = Identity(prefs)
     private val queue = EventQueue(File(context.filesDir, "nudgeon_events.json"))
@@ -126,6 +127,14 @@ internal class NudgeOnCore(
             }
             track("\$push_received", pushProps(payload))
             bus.emitReceived(payload)
+            // data-only라 OS가 알림을 만들지 않는다 — 계약상 SDK가 표시 (앱이 직접 그리면 config로 끈다).
+            // 이미지 다운로드가 있어 워커 스레드에서 그린다(호출 스레드가 메인이어도 안전).
+            if (config.autoDisplayNotifications) {
+                work.execute {
+                    runCatching { PushNotifications.show(appContext, config, payload, data) }
+                        .onFailure { NudgeOnLog.warn("알림 표시 실패: ${it.message}") }
+                }
+            }
         }
         return true
     }

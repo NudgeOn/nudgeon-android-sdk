@@ -15,6 +15,7 @@
     <string name="refresh_status">Refresh local SDK status</string>
     <string name="opt_in">Local opt in</string>
     <string name="opt_out">Local opt out</string>
+    <string name="preview_notification">Preview SDK notification (no FCM)</string>
     <string name="push_channel_name">NudgeOn sample messages</string>
     <string name="log_initial">Activity log</string>
     <string name="token_label">FCM token (길게 눌러 복사 — 콘솔 테스트 발송에 사용)</string>

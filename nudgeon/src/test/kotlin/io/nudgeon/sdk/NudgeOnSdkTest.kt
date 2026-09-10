@@ -18,15 +18,22 @@ class PushPayloadTest {
             mapOf(
                 "message_id" to "m-1", "campaign_id" to "c-1", "journey_id" to "j-1",
                 "title" to "제목", "body" to "본문", "deep_link" to "myapp://x",
+                "image_url" to "https://x/i.png",
                 "data" to """{"k":"v","n":3}""",
             ),
         )
         assertEquals("m-1", p?.messageId)
+        assertEquals("j-1", p?.journeyId)
+        assertEquals("https://x/i.png", p?.imageUrl)
         assertEquals("c-1", p?.campaignId)
         assertEquals("제목", p?.title)
         assertEquals("myapp://x", p?.deepLink)
         assertEquals("v", p?.data?.get("k"))
         assertEquals("3", p?.data?.get("n")) // 숫자도 문자열 평탄화
+    }
+
+    @Test fun imageUrlAbsentIsNull() {
+        assertNull(PushPayload.parse(mapOf("message_id" to "m-1", "title" to "t"))?.imageUrl)
     }
 
     @Test fun returnsNullForNonNudgeOnMessage() {

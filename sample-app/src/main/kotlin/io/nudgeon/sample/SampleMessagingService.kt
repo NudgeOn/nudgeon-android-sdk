@@ -1,75 +1,22 @@
 package io.nudgeon.sample
 
-import android.Manifest
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
-import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import io.nudgeon.sdk.NudgeOn
 
+/**
+ * 자체 FirebaseMessagingService 공존 예시 (PRD-01A 3.2). NudgeOn 메시지는 SDK에 위임하면 끝이다 —
+ * 알림 표시(제목·본문·이미지·탭 → 앱 진입)는 SDK가 한다(`NudgeOnConfig.autoDisplayNotifications`, 기본 true).
+ * 앱이 직접 알림을 그리려면 config에서 끄고 `NudgeOn.onPushReceived` 리스너에서 그린다.
+ */
 class SampleMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         NudgeOn.setPushToken(token)
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
-        val data = PushIntentData.from(message.data)
-        if (!NudgeOn.handleRemoteMessage(data)) {
-            super.onMessageReceived(message)
-            return
+        if (!NudgeOn.handleRemoteMessage(message.data)) {
+            super.onMessageReceived(message) // NudgeOn 메시지가 아님 — 앱의 다른 푸시 처리
         }
-        showNotification(data)
-    }
-
-    private fun showNotification(data: Map<String, String>) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val canNotify = manager.areNotificationsEnabled() &&
-            (Build.VERSION.SDK_INT < 33 ||
-                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
-        if (!canNotify) {
-            Log.w(TAG, "알림 권한이 없어 수신 이벤트만 전달하고 알림 UI는 표시하지 않습니다")
-            return
-        }
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.push_channel_name),
-                NotificationManager.IMPORTANCE_DEFAULT,
-            ),
-        )
-
-        val messageId = data.getValue("message_id")
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            data.forEach { (key, value) -> putExtra(key, value) }
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            messageId.hashCode(),
-            openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        val notification = Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(data["title"].orEmpty().ifBlank { getString(R.string.app_name) })
-            .setContentText(data["body"].orEmpty())
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
-            .build()
-
-        manager.notify(messageId.hashCode(), notification)
-    }
-
-    private companion object {
-        const val CHANNEL_ID = "nudgeon_sample_push"
-        const val TAG = "NudgeOnSamplePush"
     }
 }

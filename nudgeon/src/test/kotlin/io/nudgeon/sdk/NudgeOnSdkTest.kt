@@ -224,3 +224,35 @@ class IdentifySyncTest {
         assertEquals(1, sender.sent.size)
     }
 }
+
+/** 같은 message_id 재수신 접기 (플랫폼 M-4: 서버 at-least-once 창에서 같은 메시지가 한 번 더 온다). */
+class SeenMessagesTest {
+    private class MemStore : SeenMessages.Store { override var ids: List<String> = emptyList() }
+
+    @Test fun secondDeliveryOfSameMessageIsNotFirstTime() {
+        val seen = SeenMessages(MemStore())
+        assertTrue(seen.firstTime("m-1"))
+        assertFalse(seen.firstTime("m-1"))
+        assertTrue(seen.firstTime("m-2"))
+    }
+
+    @Test fun rememberedAcrossInstancesViaStore() {
+        val store = MemStore()
+        assertTrue(SeenMessages(store).firstTime("m-1"))
+        assertFalse(SeenMessages(store).firstTime("m-1")) // 프로세스 재시작 후에도 접는다
+    }
+
+    @Test fun capacityEvictsOldest() {
+        val store = MemStore()
+        val seen = SeenMessages(store, capacity = 3)
+        for (i in 1..4) seen.firstTime("m-$i")
+        assertEquals(listOf("m-2", "m-3", "m-4"), store.ids)
+        assertTrue(seen.firstTime("m-1")) // 밀려난 것은 다시 처음으로 본다
+    }
+
+    @Test fun emptyIdNeverDeduped() {
+        val seen = SeenMessages(MemStore())
+        assertTrue(seen.firstTime(""))
+        assertTrue(seen.firstTime(""))
+    }
+}

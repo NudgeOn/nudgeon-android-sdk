@@ -42,6 +42,13 @@ internal class Identity(private val prefs: SharedPreferences) {
             }.apply()
     }
 
+    /** 최근 수신한 push message_id — 중복 수신 접기(SeenMessages). reset과 무관하게 유지한다. */
+    val seenMessages: SeenMessages.Store = object : SeenMessages.Store {
+        override var ids: List<String>
+            get() = prefs.getString(SEEN, null)?.split('\n')?.filter { it.isNotEmpty() } ?: emptyList()
+            set(v) = prefs.edit().putString(SEEN, v.joinToString("\n")).apply()
+    }
+
     /**
      * reset() — 로그아웃. external 제거 + 새 anon_id. device_id는 유지(설치 단위).
      * 이전 유저에게 다음 유저 푸시가 가는 사고 방지 (S-4). 이전 유저의 미전송 identify도 버린다
@@ -58,5 +65,6 @@ internal class Identity(private val prefs: SharedPreferences) {
         const val EXTERNAL = "nudgeon.external_id"
         const val PENDING_EXT = "nudgeon.identify_pending.external_id"
         const val PENDING_ANON = "nudgeon.identify_pending.anon_id"
+        const val SEEN = "nudgeon.push.seen_message_ids"
     }
 }

@@ -29,6 +29,7 @@ internal class NudgeOnCore(
     private val work = Executors.newSingleThreadExecutor()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     @Volatile private var flushing = false
+    private val seen = SeenMessages(identity.seenMessages)
     private val identifySync = IdentifySync(
         store = identity.pendingIdentify,
         send = { ext, anon, done -> network.sendIdentify(ext, anon, emptyMap(), done) },
@@ -118,6 +119,11 @@ internal class NudgeOnCore(
             track("\$push_opened", pushProps(payload))
             bus.emitOpened(payload)
         } else {
+            // 같은 message_id의 재수신(서버 at-least-once 창)은 여기서 접는다 — 이벤트도 리스너도 두 번 가지 않는다.
+            if (!seen.firstTime(payload.messageId)) {
+                NudgeOnLog.info("중복 수신 접음: message_id=${payload.messageId}")
+                return true
+            }
             track("\$push_received", pushProps(payload))
             bus.emitReceived(payload)
         }

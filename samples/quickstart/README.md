@@ -7,7 +7,7 @@
 >
 > | | [`sample-app`](../../sample-app) | `samples/quickstart` (여기) |
 > |---|---|---|
-> | SDK 출처 | 로컬 `:nudgeon` 모듈 | **Maven Central `0.1.0`** |
+> | SDK 출처 | 로컬 `:nudgeon` 모듈 | **Maven Central `0.1.2`** |
 > | 목적 | 개발 중 코드 검증 | **게시된 아티팩트 검증 · 통합 예제** |
 > | 범위 | FCM·딥링크까지 전체 | 초기화 · identify · track · 권한 |
 
@@ -40,7 +40,7 @@ sdk.dir=/Users/you/Library/Android/sdk
 
 ```kotlin
 dependencies {
-    implementation("io.nudgeon:nudgeon-sdk:0.1.0")
+    implementation("io.nudgeon:nudgeon-sdk:0.1.2")
 }
 ```
 

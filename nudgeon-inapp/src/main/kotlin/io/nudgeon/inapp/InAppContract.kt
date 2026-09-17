@@ -14,3 +14,6 @@ internal fun validateArtifact(artifact: JSONObject) {
 data class InAppAction(val type: String, val url: String? = null, val text: String? = null)
 data class InAppPairing(val id: String, val confirmationCode: String, val expiresAt: String)
 internal class InAppHttpError(val status: Int): Exception("HTTP $status")
+
+internal fun terminationEvent(reason: String, failure: Boolean, shown: Boolean, lifecycleEvents: Boolean): Pair<String,String> =
+    if (failure) "failed" to reason else if (lifecycleEvents) "cancelled" to reason else if (shown) "dismiss" to reason else "failed" to "HOST_BLOCKED"

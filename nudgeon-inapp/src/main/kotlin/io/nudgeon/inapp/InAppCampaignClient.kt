@@ -21,6 +21,7 @@ class InAppCampaignClient(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = InAppInstallationStore(application, sha256(configuration.apiUrl + "|" + configuration.sdkKey))
     private var credential: String? = null
+    private var lifecycleEvents = false
     private var enabled = false; private var busy = false; private var shown = false
     private var generation = UUID.randomUUID(); private var session = UUID.randomUUID()
     private var resumed: Activity? = null; private var renderer: InAppRenderer? = null; private var delivery: String? = null
@@ -29,8 +30,8 @@ class InAppCampaignClient(
     private var retryAt = 0L; private var failures = 0
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(activity: Activity) { resumed = activity }
-        override fun onActivityPaused(activity: Activity) { if (resumed === activity) { resumed = null; contextChanged() } }
-        override fun onActivityDestroyed(activity: Activity) { if (resumed === activity) { resumed = null; contextChanged() } }
+        override fun onActivityPaused(activity: Activity) { if (resumed === activity) { resumed = null; stop("background") } }
+        override fun onActivityDestroyed(activity: Activity) { if (resumed === activity) { resumed = null; stop("host_destroyed") } }
         override fun onActivityCreated(activity: Activity, state: Bundle?) {}
         override fun onActivityStarted(activity: Activity) {}
         override fun onActivityStopped(activity: Activity) {}
@@ -44,10 +45,15 @@ class InAppCampaignClient(
     }
     private fun main() { check(Looper.myLooper() == Looper.getMainLooper()) }
     fun enable() { main(); if (enabled) return; enabled = true; resumed = host()?.takeIf { !it.isFinishing && !it.isDestroyed }; startPolling(); foreground() }
-    fun disable() { main(); enabled = false; contextChanged(); polling?.cancel(); polling = null; scope.launch { runCatching { flush() } } }
-    fun contextChanged() { main(); generation = UUID.randomUUID(); delivery?.let { queue(it,"failed","CONTEXT_CHANGED") }; shown = false; renderer?.close(); renderer = null; delivery = null; expiry?.cancel() }
-    fun foreground() { main(); if (!enabled) return; contextChanged(); session = UUID.randomUUID(); trigger(JSONObject().put("type","foreground")) }
-    fun screen(name: String) { main(); contextChanged(); trigger(JSONObject().put("type","screen").put("name",name)) }
+    fun disable() { main(); enabled = false; stop("disabled"); polling?.cancel(); polling = null; scope.launch { runCatching { flush() } } }
+    fun contextChanged() { stop("context_changed") }
+    private fun stop(reason: String, failure: Boolean = false) {
+        main(); generation = UUID.randomUUID()
+        delivery?.let { val event = terminationEvent(reason, failure, shown, lifecycleEvents); queue(it,event.first,event.second) }
+        shown = false; renderer?.close(); renderer = null; delivery = null; expiry?.cancel()
+    }
+    fun foreground() { main(); if (!enabled) return; stop("session_ended"); session = UUID.randomUUID(); trigger(JSONObject().put("type","foreground")) }
+    fun screen(name: String) { main(); stop("screen_changed"); trigger(JSONObject().put("type","screen").put("name",name)) }
     fun track(name: String) { main(); trigger(JSONObject().put("type","event").put("name",name)) }
     suspend fun forgetInstallation() { main(); disable(); runCatching { request("revoke",JSONObject()) }; credential = null; store.clear(); journal?.clear(); journal = null }
     fun destroy() { disable(); application.unregisterActivityLifecycleCallbacks(lifecycle); scope.cancel() }
@@ -66,25 +72,25 @@ class InAppCampaignClient(
                 val response = request("decisions",JSONObject().put("request_key",UUID.randomUUID()).put("session_id",sessionId).put("trigger",trigger))
                 val artifact = response.optJSONObject("delivery") ?: return@launch
                 val id = artifact.getString("id")
-                if (!enabled || current != generation || activity !== resumed || !isAllowed()) { queue(id,"failed","HOST_BLOCKED"); return@launch }
-                delivery = id; validateArtifact(artifact)
+                if (!enabled || current != generation || activity !== resumed || !isAllowed()) { queue(id,if(artifact.optBoolean("lifecycle_events")) "cancelled" else "failed",if(artifact.optBoolean("lifecycle_events")) "host_blocked" else "HOST_BLOCKED"); return@launch }
+                delivery = id; lifecycleEvents = artifact.optBoolean("lifecycle_events"); validateArtifact(artifact)
                 renderer = InAppRenderer(activity,artifact,configuration.allowedSchemes,configuration.allowedWebHosts,
                     showHideToday = true, beforeShow = { show -> scope.launch {
                         try {
                             val authorization = request("deliveries/$id/authorize",JSONObject())
                             if (delivery != id) return@launch
-                            if (!enabled || current != generation || activity !== resumed || !isAllowed()) { contextChanged(); return@launch }
+                            if (!enabled || current != generation || activity !== resumed || !isAllowed()) { stop("host_blocked"); return@launch }
                             val millis = Instant.parse(authorization.getString("expires_at")).toEpochMilli() - System.currentTimeMillis()
-                            if (millis <= 0) { contextChanged(); return@launch }; show()
-                            expiry = scope.launch { delay(minOf(millis,290000)); if (delivery == id) contextChanged() }
+                            if (millis <= 0) { stop("display_timeout"); return@launch }; show()
+                            expiry = scope.launch { delay(minOf(millis,290000)); if (delivery == id) stop("display_timeout") }
                         } catch (e: CancellationException) { throw e }
-                        catch (_: Exception) { if (delivery == id) contextChanged(); onDiagnostic("DISPLAY_AUTHORIZATION_FAILED") }
+                        catch (_: Exception) { if (delivery == id) stop("DISPLAY_AUTHORIZATION_FAILED",true); onDiagnostic("DISPLAY_AUTHORIZATION_FAILED") }
                     } }, canPresent = { enabled && generation == current && activity === resumed && isAllowed() },
-                    onEvent = { kind, detail -> if (kind == "presented") shown = true; queue(id,kind,detail) },
+                    onEvent = { kind, detail -> if (kind == "presented") shown = true; if(kind == "failed" && detail == "RUN_EXPIRED" && lifecycleEvents) queue(id,"cancelled","display_timeout") else queue(id,kind,detail) },
                     onEnd = { action -> if (delivery == id) { shown = false; renderer = null; delivery = null; expiry?.cancel(); if (action != null) onAction(action) } })
                 renderer!!.prepare()
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (delivery != null) contextChanged(); onDiagnostic("CAMPAIGN_REQUEST_FAILED"); if (e is InAppHttpError && e.status == 401) disable() }
+            catch (e: Exception) { if (delivery != null) stop("CAMPAIGN_REQUEST_FAILED",true); onDiagnostic("CAMPAIGN_REQUEST_FAILED"); if (e is InAppHttpError && e.status == 401) disable() }
             finally { busy = false }
         }
     }
@@ -92,7 +98,7 @@ class InAppCampaignClient(
     private fun startPolling() {
         polling?.cancel(); polling = scope.launch {
             while (isActive && enabled) {
-                if (resumed != null) try { flush(); val id = delivery; if (shown && id != null && !request("deliveries/$id").getBoolean("active") && delivery == id) contextChanged() }
+                if (resumed != null) try { flush(); val id = delivery; if (shown && id != null) { val status = request("deliveries/$id"); if(!status.getBoolean("active") && delivery == id) stop(status.optString("reason").takeIf { it.isNotBlank() && it != "null" } ?: "delivery_inactive") } }
                 catch (e: CancellationException) { throw e }
                 catch (e: Exception) { onDiagnostic("CAMPAIGN_SYNC_FAILED"); if (e is InAppHttpError && e.status == 401) { disable(); return@launch } }
                 delay(3000)
@@ -122,6 +128,7 @@ class InAppCampaignClient(
         return withContext(Dispatchers.IO) {
             val c = URI(configuration.apiUrl.trimEnd('/') + "/v1/in-app/live/" + path).toURL().openConnection() as HttpURLConnection
             c.instanceFollowRedirects = false; c.connectTimeout = 10000; c.readTimeout = 10000; c.requestMethod = if (body == null) "GET" else "POST"
+            c.setRequestProperty("X-NudgeOn-In-App-Capabilities","campaign-time-zone")
             c.setRequestProperty("Authorization","Bearer ${configuration.sdkKey}"); if (token != null) c.setRequestProperty("X-NudgeOn-Installation",token)
             try { if (body != null) { c.doOutput = true; c.setRequestProperty("Content-Type","application/json"); c.outputStream.use { it.write(body.toString().toByteArray()) } }
                 if (c.responseCode !in 200..299) throw InAppHttpError(c.responseCode)

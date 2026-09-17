@@ -3,21 +3,15 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.nudgeon/nudgeon-sdk?label=Maven%20Central)](https://central.sonatype.com/artifact/io.nudgeon/nudgeon-sdk)
 [![CI](https://github.com/NudgeOn/nudgeon-android-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/NudgeOn/nudgeon-android-sdk/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)
+[![status](https://img.shields.io/badge/status-beta--candidate-orange.svg)](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)
 
 [NudgeOn](https://nudgeon.io) 고객 인게이지먼트 플랫폼의 Android(Kotlin) 네이티브 코어 SDK.
-이벤트를 수집하고 푸시를 수신합니다. iOS SDK와 API가 동형입니다.
+이벤트를 수집하고 푸시를 수신합니다. 공통 이벤트·식별·푸시 API를 제공합니다.
 
-> ⚠️ **알파입니다. 프로덕션에 쓰지 마세요.**
-> 코어 경로(init · identify · track · 오프라인 큐 · reset · 속성 · 푸시 등록 · 리스너 · 토큰 대사 · FMS 위임)는
-> 동작하지만, 아래가 아직 완료되지 않았습니다.
->
-> - **`message_id` 연결** — 서버·iOS·Android가 푸시 payload에서 식별자를 읽는 방식이 아직 통일되지 않았습니다. 발송·도달·리포트 간 조인이 보장되지 않습니다
-> - **수신 동의 · 로그아웃 · 토큰 소유권** 서버 동기화 — `reset()`은 현재 로컬 상태만 정리합니다
-> - **실기기 · 실공급자 발송 검증**
->
-> API와 스키마는 예고 없이 바뀔 수 있습니다. 진행 상황은
-> [출시 체크리스트](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)를 보세요.
+> **파트너 베타 후보입니다.** 코어와 인앱 모듈 0.2.2는 Maven Central에 공개 배포되어 있습니다.
+> 플랫폼 전체의 관리형 저장소·목표 부하·24시간 시험과 외부 온보딩 검증은 남아 있습니다.
+> 최신 단말·공급자 검증 범위는 [출시 체크리스트](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)를 확인하세요.
+> 서버·SDK의 공통 메시지 식별자 계약은 아래 푸시 계약 문서를 따릅니다.
 
 - **플랫폼 저장소** — [NudgeOn/nudgeon-platform](https://github.com/NudgeOn/nudgeon-platform)
 - **API 가이드** — [docs-public/API.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/API.md)

@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 rootProject.name = "nudgeon-android-sdk"
 include(":nudgeon")
 include(":sample-app")
+
+include(":nudgeon-inapp")

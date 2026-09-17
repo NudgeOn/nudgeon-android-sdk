@@ -40,41 +40,40 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
         run: |
           set -euo pipefail
-          ./gradlew :nudgeon:publishReleasePublicationToCentralStagingRepository --no-daemon
+          ./gradlew :nudgeon:publishReleasePublicationToCentralStagingRepository :nudgeon-inapp:publishReleasePublicationToCentralStagingRepository --no-daemon
 
       - name: Central 요구사항 검증
         run: |
           set -euo pipefail
-          ROOT=nudgeon/build/staging-deploy
+          ROOT=build/staging-deploy
           test -d "$ROOT/io/nudgeon" || { echo "::error::스테이징 산출물이 없습니다"; exit 1; }
 
           # maven-metadata 는 번들에 포함하면 Central이 거부한다.
           find "$ROOT" -name 'maven-metadata*' -delete
 
-          DIR=$(find "$ROOT/io/nudgeon" -mindepth 2 -maxdepth 2 -type d | head -1)
-          echo "번들 대상: $DIR"
-          ls -1 "$DIR"
-
-          fail=0
-          for ext in .aar .pom -sources.jar -javadoc.jar; do
-            f=$(ls "$DIR"/*"$ext" 2>/dev/null | grep -v '\.asc$' | head -1 || true)
-            if [ -z "$f" ]; then echo "::error::필수 아티팩트 없음: *$ext"; fail=1; continue; fi
-            for req in .asc .md5 .sha1; do
-              [ -f "${f}${req}" ] || { echo "::error::${f}${req} 없음"; fail=1; }
+          VER=$(sed -n 's/^version = "\(.*\)"/\1/p' nudgeon/build.gradle.kts)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then test "$GITHUB_REF_NAME" = "$VER"; fi
+          for artifact in nudgeon-sdk nudgeon-inapp; do
+            DIR="$ROOT/io/nudgeon/$artifact/$VER"
+            for ext in .aar .pom -sources.jar -javadoc.jar; do
+              f="$DIR/$artifact-$VER$ext"
+              test -f "$f" || { echo "::error::Missing $f"; exit 1; }
+              for req in .asc .md5 .sha1; do
+                test -f "$f$req" || { echo "::error::Missing $f$req"; exit 1; }
+              done
             done
           done
-          [ "$fail" = "0" ] || exit 1
           echo "필수 아티팩트·서명·체크섬 확인 완료"
 
       - name: 번들 zip 생성
         id: zip
         run: |
           set -euo pipefail
-          cd nudgeon/build/staging-deploy
+          cd build/staging-deploy
           VER=$(find io/nudgeon -mindepth 2 -maxdepth 2 -type d | head -1 | awk -F/ '{print $NF}')
           NAME="nudgeon-sdk-${VER}-central-bundle.zip"
-          zip -r "../../../$NAME" io >/dev/null
-          cd ../../..
+          zip -r "../../$NAME" io >/dev/null
+          cd ../..
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           unzip -l "$NAME"

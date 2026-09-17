@@ -76,6 +76,7 @@ kotlin {
 
 dependencies {
     implementation(project(":nudgeon"))
+    implementation(project(":nudgeon-inapp"))
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.fragment:fragment-ktx:1.6.2")
     implementation("com.google.firebase:firebase-messaging:25.0.1")

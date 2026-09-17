@@ -42,6 +42,16 @@ class MainActivity : ComponentActivity() {
         tokenText = findViewById(R.id.token_text)
         externalIdInput = findViewById(R.id.external_id)
 
+        val testButton = Button(this).apply {
+            text = "In-app event test"
+            setOnClickListener { startActivity(Intent(this@MainActivity, InAppTestActivity::class.java)) }
+        }
+        (statusText.parent as? android.view.ViewGroup)?.addView(testButton, 0)
+        val campaignButton = Button(this).apply {
+            text = "Live in-app campaigns"
+            setOnClickListener { startActivity(Intent(this@MainActivity, InAppCampaignActivity::class.java)) }
+        }
+        (statusText.parent as? android.view.ViewGroup)?.addView(campaignButton, 1)
         bindActions()
         registerPushListeners()
         refreshStatus()

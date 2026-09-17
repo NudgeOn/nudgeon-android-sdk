@@ -86,6 +86,11 @@ internal class InAppRenderer(
             "ready" -> { respond(request); if (!ready) { ready = true; onEvent("content_ready", ""); if (beforeShow != null) beforeShow.invoke { show() } else show() } }
             "log" -> { onEvent("log", "JS_ERROR"); respond(request) }
             "dismiss" -> if (presented) { respond(request); finish("html_close") } else respond(request, "NOT_PRESENTED")
+            "hideToday" -> when {
+                !presented -> respond(request, "NOT_PRESENTED")
+                !showHideToday -> respond(request, "LIVE_CAMPAIGN_REQUIRED")
+                else -> { respond(request); hideToday() }
+            }
             "performAction" -> {
                 if (!presented || actionTaken) { respond(request, "NOT_PRESENTED"); return }
                 val actionId = m.optJSONObject("payload")?.optString("action_id") ?: ""
@@ -123,7 +128,7 @@ internal class InAppRenderer(
         root.addView(close, FrameLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.END).apply { topMargin = (4 * dp).toInt(); marginEnd = (8 * dp).toInt() })
         root.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         if (showHideToday) {
-            val hide = Button(activity).apply { text = "Hide today (UTC)"; setOnClickListener { onEvent("hide_today", ""); finish("hide_today") } }
+            val hide = Button(activity).apply { text = "Hide today (UTC)"; setOnClickListener { hideToday() } }
             root.addView(hide, FrameLayout.LayoutParams((200 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.START).apply { topMargin = (4 * dp).toInt(); marginStart = (8 * dp).toInt() })
         }
         d.setContentView(root); d.setCanceledOnTouchOutside(false); d.setOnCancelListener { finish("back_button") }
@@ -132,6 +137,10 @@ internal class InAppRenderer(
         presented = true; onEvent("presented", ""); handler.removeCallbacks(timeout); handler.postDelayed(impressionTimer,1000); handler.postDelayed(expiry,290000)
     }
     private fun recordImpression() { if (presented && !ended && !impression) { impression = true; onEvent("impression", "") } }
+    private fun hideToday() {
+        if (!presented || ended || !showHideToday) return
+        recordImpression(); onEvent("hide_today", ""); finish("hide_today")
+    }
     private fun respond(id: String, error: String? = null) {
         val r = JSONObject().put("request_id", id).put("ok", error == null); if (error != null) r.put("error", JSONObject().put("code", error))
         val script = "window.__nudgeonReply($r)"; replies[id] = script; web?.evaluateJavascript(script,null)

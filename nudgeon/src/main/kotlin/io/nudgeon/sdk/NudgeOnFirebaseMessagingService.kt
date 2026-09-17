@@ -19,6 +19,6 @@ open class NudgeOnFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         val handled = NudgeOn.handleRemoteMessage(message.data) // 포그라운드/백그라운드 데이터 수신
         if (!handled) super.onMessageReceived(message)
-        // 알림 표시는 앱/서버 notification 페이로드에 따르며, 도달 지표는 서버 발송 계측으로 대체.
+        // 기본 알림 표시·도달 이벤트는 handleRemoteMessage가 처리한다 (autoDisplayNotifications 설정).
     }
 }

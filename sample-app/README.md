@@ -57,7 +57,7 @@ nudgeon.apiHost=http://192.168.0.10:8080
 
 ## 3. data-only 푸시 계약
 
-샘플 서비스는 아래 문자열 data key를 받습니다. `message_id`가 없으면 NudgeOn 메시지가 아니므로 처리하지 않습니다.
+샘플 서비스는 아래 문자열 data key를 받아 SDK에 위임합니다. `message_id`가 없으면 NudgeOn 메시지가 아니므로 처리하지 않습니다.
 
 ```json
 {
@@ -70,9 +70,10 @@ nudgeon.apiHost=http://192.168.0.10:8080
 }
 ```
 
-SDK의 기본 `NudgeOnFirebaseMessagingService`는 data 위임만 하고 알림 UI를 만들지 않습니다. 그래서 이 앱의
-`SampleMessagingService`가 수신 이벤트를 SDK에 전달한 다음 NotificationChannel·알림·PendingIntent를
-만듭니다. 알림을 탭하면 `MainActivity.onCreate` 또는 `onNewIntent`가 같은 data를
+SDK 0.2.2는 `NudgeOnConfig.autoDisplayNotifications`가 기본 true이며,
+`SampleMessagingService`가 `NudgeOn.handleRemoteMessage`에 위임하면 SDK가
+NotificationChannel·알림·탭 진입을 처리합니다. 앱이 직접 알림을 표시하려면
+자동 표시를 끄고 `onPushReceived`에서 처리하세요. 알림 탭은 앱 진입 경로에서
 `NudgeOn.handlePushOpened`로 전달합니다.
 
 FCM 없이 앱 딥링크만 확인하려면:

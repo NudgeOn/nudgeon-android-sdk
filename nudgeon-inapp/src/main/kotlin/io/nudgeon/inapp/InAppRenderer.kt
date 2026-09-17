@@ -31,6 +31,7 @@ internal class InAppRenderer(
 ) {
     private val url = "https://nudgeon.invalid/index.html"
     private val nonce = UUID.randomUUID().toString()
+    private val bridgeContext = JSONObject().put("time_zone", artifact.optString("time_zone", "UTC"))
     private val id = artifact.getString("id")
     private val manifest = artifact.getJSONObject("manifest")
     private val handler = Handler(Looper.getMainLooper())
@@ -65,7 +66,7 @@ internal class InAppRenderer(
                 return WebResourceResponse("text/plain", "utf-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
             }
             override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest) = true
-            override fun onPageFinished(v: WebView, loaded: String) { if (!ended && loaded == url) { onEvent("bridge_ready", ""); v.evaluateJavascript("window.__nudgeonConnect(${JSONObject.quote(id)},${JSONObject.quote(nonce)})", null) } }
+            override fun onPageFinished(v: WebView, loaded: String) { if (!ended && loaded == url) { onEvent("bridge_ready", ""); v.evaluateJavascript("window.__nudgeonConnect(${JSONObject.quote(id)},${JSONObject.quote(nonce)},$bridgeContext)", null) } }
             override fun onReceivedError(v: WebView, r: WebResourceRequest, e: WebResourceError) { if (r.isForMainFrame) fail("WEBVIEW_ERROR") }
             override fun onRenderProcessGone(v: WebView, detail: RenderProcessGoneDetail): Boolean { fail("WEBVIEW_TERMINATED"); return true }
         }
@@ -128,7 +129,7 @@ internal class InAppRenderer(
         root.addView(close, FrameLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.END).apply { topMargin = (4 * dp).toInt(); marginEnd = (8 * dp).toInt() })
         root.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         if (showHideToday) {
-            val hide = Button(activity).apply { text = "Hide today (UTC)"; setOnClickListener { hideToday() } }
+            val hide = Button(activity).apply { text = "Hide today"; contentDescription = "Hide until midnight (${artifact.optString("time_zone", "UTC")})"; setOnClickListener { hideToday() } }
             root.addView(hide, FrameLayout.LayoutParams((200 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.START).apply { topMargin = (4 * dp).toInt(); marginStart = (8 * dp).toInt() })
         }
         d.setContentView(root); d.setCanceledOnTouchOutside(false); d.setOnCancelListener { finish("back_button") }

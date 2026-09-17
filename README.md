@@ -23,13 +23,13 @@
 - **API 가이드** — [docs-public/API.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/API.md)
 - **푸시 계약** — [docs-public/PUSH-CONTRACT.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/PUSH-CONTRACT.md)
 - **개발자센터** — [nudgeon.io](https://nudgeon.io)
-- **인앱 웹 소스 테스트** — [nudgeon-inapp 연결 안내](IN-APP-TESTING.md) (0.2.0)
+- **인앱 웹 소스 테스트** — [nudgeon-inapp 연결 안내](IN-APP-TESTING.md) (0.2.2)
 
 ## 설치 (Maven Central)
 
 ```kotlin
 dependencies {
-    implementation("io.nudgeon:nudgeon-sdk:0.2.0")
+    implementation("io.nudgeon:nudgeon-sdk:0.2.2")
 }
 ```
 

@@ -45,3 +45,9 @@ Live campaign events are written atomically to an installation-scoped journal be
 implementation("io.nudgeon:nudgeon-sdk:0.2.0")
 implementation("io.nudgeon:nudgeon-inapp:0.2.0")
 ```
+
+## HTML 안의 오늘 하루 안 보기 (0.2.1+)
+
+업데이트한 NudgeOn 서버에서 저장한 소스는 `window.nudgeonBridge.hideToday()`를 호출할 수 있습니다. 표시 중인 라이브 캠페인에서 impression → hide_today → dismiss(hide_today)를 기록하고 닫습니다. 동일 설치·캠페인을 다음 UTC 자정(한국 시간 오전 9시)까지 제외합니다. 별도 manifest 액션 등록은 필요 없습니다.
+
+테스트 연결 모드에서는 `LIVE_CAMPAIGN_REQUIRED`로 거절하고 팝업을 유지합니다. 콘솔 미리보기에서는 모의 실행임을 표시합니다. 기존 SDK 0.2.0은 HTML 호출을 지원하지 않으므로 0.2.1 이상이 필요합니다. 일반 `dismiss()`는 오늘 하루 숨김을 적용하지 않습니다.

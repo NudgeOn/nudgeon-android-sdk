@@ -1,33 +1,20 @@
-// NudgeOn Android SDK — 코어 모듈 (PRD-01A 3.2)
-plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("maven-publish")
-    id("signing")
-}
-
+plugins { id("com.android.library"); id("org.jetbrains.kotlin.android"); id("maven-publish"); id("signing") }
 group = "io.nudgeon"
 version = "0.2.0"
-
 android {
-    namespace = "io.nudgeon.sdk"
+    namespace = "io.nudgeon.inapp"
     compileSdk = 34
-
-    defaultConfig {
-        minSdk = 26 // Android 8+ (PRD-01A 1.2)
-        consumerProguardFiles("consumer-rules.pro")
-    }
-    publishing {
-        singleVariant("release") {
-            // Maven Central은 sources·javadoc 아티팩트를 모두 요구한다.
-            withSourcesJar()
-            withJavadocJar()
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+    defaultConfig { minSdk = 26; consumerProguardFiles("consumer-rules.pro") }
+    publishing { singleVariant("release") { withSourcesJar(); withJavadocJar() } }
+    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+}
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
+dependencies {
+    implementation(project(":nudgeon"))
+    implementation("androidx.webkit:webkit:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
 
 afterEvaluate {
@@ -35,10 +22,10 @@ afterEvaluate {
         publications {
             create<MavenPublication>("release") {
                 from(components["release"])
-                artifactId = "nudgeon-sdk"
+                artifactId = "nudgeon-inapp"
                 pom {
-                    name.set("NudgeOn Android SDK")
-                    description.set("Android SDK for the NudgeOn customer engagement platform")
+                    name.set("NudgeOn Android In-App SDK")
+                    description.set("Optional transparent WebView campaigns and source testing for NudgeOn")
                     url.set("https://github.com/NudgeOn/nudgeon-android-sdk")
                     licenses {
                         license {
@@ -81,22 +68,4 @@ afterEvaluate {
             sign(publishing.publications["release"])
         }
     }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
-dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("androidx.work:work-runtime-ktx:2.9.0") // 백그라운드 플러시 (WorkManager)
-    implementation("androidx.core:core-ktx:1.13.1")         // NotificationManagerCompat (권한 상태)
-    implementation("androidx.lifecycle:lifecycle-process:2.8.3") // 앱 포그라운드 관찰 (R-08 권한 재동기화)
-    // 기본 FCM 서비스용. compileOnly — 위임 API만 쓰는 앱엔 Firebase 강제 안 함 (PRD-01A 3.2).
-    compileOnly("com.google.firebase:firebase-messaging:24.0.0")
-
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20240303") // 단위 테스트에서 org.json 실제 구현 (android.jar 스텁 회피)
 }

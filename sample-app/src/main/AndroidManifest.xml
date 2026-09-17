@@ -14,6 +14,9 @@
         android:theme="@style/Theme.NudgeOnSample"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
 
+        <activity android:name=".InAppCampaignActivity" android:exported="false" />
+        <activity android:name=".InAppTestActivity" android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

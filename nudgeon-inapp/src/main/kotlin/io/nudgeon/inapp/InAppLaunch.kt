@@ -11,6 +11,7 @@ internal class InAppLaunchRegistry {
 
 /** Monotonic preparation budget; never persists across process restarts. */
 internal class InAppLaunchWindow(timeoutSeconds: Double, nowMillis: Long) {
+    companion object { fun displayDuration(value: Double) = if (value.isFinite()) value.coerceIn(3.0,5.0) else 4.0 }
     val deadline = nowMillis + ((if (timeoutSeconds.isFinite()) timeoutSeconds.coerceIn(1.0,10.0) else 3.0) * 1000).toLong()
     var result: InAppLaunchResult? = null
         private set

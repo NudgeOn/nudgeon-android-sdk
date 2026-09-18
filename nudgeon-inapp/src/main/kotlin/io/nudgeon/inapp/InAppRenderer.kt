@@ -26,7 +26,7 @@ import java.util.UUID
 internal class InAppRenderer(
     private val activity: Activity, private val artifact: JSONObject,
     private val allowedSchemes: Set<String>, private val allowedHosts: Set<String>,
-    private val showHideToday: Boolean = false, private val beforeShow: (((() -> Unit)) -> Unit)? = null,
+    private val showHideToday: Boolean = false, private val autoDismissSeconds: Double? = null, private val beforeShow: (((() -> Unit)) -> Unit)? = null,
     private val canPresent: () -> Boolean, private val onEvent: (String, String) -> Unit, private val onEnd: (InAppAction?) -> Unit,
 ) {
     private val url = "https://nudgeon.invalid/index.html"
@@ -117,24 +117,49 @@ internal class InAppRenderer(
         val d = Dialog(activity); dialog = d; d.requestWindowFeature(Window.FEATURE_NO_TITLE)
         val root = FrameLayout(activity); root.setBackgroundColor(Color.TRANSPARENT)
         val dp = activity.resources.displayMetrics.density
-        val display = manifest.getJSONObject("display").getString("type")
+        val display = if (autoDismissSeconds != null) "fullscreen" else manifest.getJSONObject("display").getString("type")
+        val fullscreen = display == "fullscreen"
+        if (fullscreen) root.setBackgroundColor(Color.BLACK)
         val height = activity.resources.displayMetrics.heightPixels
         val layout = when (display) {
+            "fullscreen" -> FrameLayout.LayoutParams(-1, -1)
             "bottom" -> FrameLayout.LayoutParams(-1, (height * .65).toInt(), Gravity.BOTTOM)
             "modal" -> FrameLayout.LayoutParams(-1, (height * .8).toInt(), Gravity.CENTER)
             else -> FrameLayout.LayoutParams(-1, -1).apply { topMargin = (56 * dp).toInt() }
         }
         root.addView(web, layout)
-        val close = Button(activity).apply { text = "✕"; contentDescription = "Close event"; setOnClickListener { finish("close_button") } }
-        root.addView(close, FrameLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.END).apply { topMargin = (4 * dp).toInt(); marginEnd = (8 * dp).toInt() })
-        root.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        if (showHideToday) {
-            val hide = Button(activity).apply { text = "Hide today"; contentDescription = "Hide until midnight (${artifact.optString("time_zone", "UTC")})"; setOnClickListener { hideToday() } }
-            root.addView(hide, FrameLayout.LayoutParams((200 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.START).apply { topMargin = (4 * dp).toInt(); marginStart = (8 * dp).toInt() })
+        if (autoDismissSeconds == null) {
+            val close = Button(activity).apply { text = "✕"; contentDescription = "Close event"; setOnClickListener { finish("close_button") } }
+            root.addView(close, FrameLayout.LayoutParams((48 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.END).apply { topMargin = (4 * dp).toInt(); marginEnd = (8 * dp).toInt() })
+            root.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            if (showHideToday) {
+                val hide = Button(activity).apply { text = "Hide today"; contentDescription = "Hide until midnight (${artifact.optString("time_zone", "UTC")})"; setOnClickListener { hideToday() } }
+                root.addView(hide, FrameLayout.LayoutParams((200 * dp).toInt(), (48 * dp).toInt(), Gravity.TOP or Gravity.START).apply { topMargin = (4 * dp).toInt(); marginStart = (8 * dp).toInt() })
+            }
         }
         d.setContentView(root); d.setCanceledOnTouchOutside(false); d.setOnCancelListener { finish("back_button") }
         d.window?.apply { setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT)); addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND); setDimAmount(manifest.getJSONObject("display").getDouble("backdrop_opacity").toFloat()) }
         d.show(); d.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        if (fullscreen) {
+            d.window?.apply {
+                setBackgroundDrawable(ColorDrawable(Color.BLACK))
+                decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                statusBarColor = Color.TRANSPARENT; navigationBarColor = Color.TRANSPARENT
+            }
+            root.setOnApplyWindowInsetsListener { _, insets ->
+                for (index in 1 until root.childCount) {
+                    val control = root.getChildAt(index)
+                    val params = control.layoutParams as FrameLayout.LayoutParams
+                    params.topMargin = insets.systemWindowInsetTop + (4 * dp).toInt()
+                    params.marginStart = insets.systemWindowInsetLeft + (8 * dp).toInt()
+                    params.marginEnd = insets.systemWindowInsetRight + (8 * dp).toInt()
+                    control.layoutParams = params
+                }
+                insets
+            }
+            root.requestApplyInsets()
+        }
+        autoDismissSeconds?.let { seconds -> handler.postDelayed({ if (!ended) { recordImpression(); finish("auto_dismiss") } }, (seconds * 1000).toLong()) }
         presented = true; onEvent("presented", ""); handler.removeCallbacks(timeout); handler.postDelayed(impressionTimer,1000); handler.postDelayed(expiry,290000)
     }
     private fun recordImpression() { if (presented && !ended && !impression) { impression = true; onEvent("impression", "") } }

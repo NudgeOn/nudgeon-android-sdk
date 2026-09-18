@@ -1,4 +1,4 @@
-# In-app module (0.2.2)
+# In-app module (0.2.3)
 
 `nudgeon-inapp` is an optional Android API 26+ module. Available on Maven Central starting with 0.2.0 as `io.nudgeon:nudgeon-inapp`. It connects to the NudgeOn source workbench and never enables production campaigns automatically.
 
@@ -42,8 +42,8 @@ The sample app includes an **In-app event test** button and `InAppTestActivity`.
 Live campaign events are written atomically to an installation-scoped journal before sending (up to 1,000 records, seven-day retention). They replay in order with stable event IDs after restart; transient failures use exponential backoff up to 60 seconds plus jitter. The server accepts historical events for seven days without reopening an expired or paused delivery. Permanent 400/404/409 responses discard that event; 401 disables the client without rotating installation identity. Storage failures emit `EVENT_STORAGE_FAILED`. `forgetInstallation` clears the journal. Test-pairing sessions remain memory-only and require reconnecting after restart.
 
 ```kotlin
-implementation("io.nudgeon:nudgeon-sdk:0.2.2")
-implementation("io.nudgeon:nudgeon-inapp:0.2.2")
+implementation("io.nudgeon:nudgeon-sdk:0.2.3")
+implementation("io.nudgeon:nudgeon-inapp:0.2.3")
 ```
 
 ## HTML 안의 오늘 하루 안 보기 (0.2.1+)

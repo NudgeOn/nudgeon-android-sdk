@@ -21,6 +21,7 @@ class InAppCampaignActivity : Activity() {
             host={this},isAllowed={!isFinishing && !isDestroyed},
             onAction={logs.append("\nValidated action: ${it.type}")},onDiagnostic={logs.append("\n$it")})
         layout.addView(TextView(this).apply { text="NudgeOn live campaigns"; textSize=22f })
+        layout.addView(Button(this).apply { text="App launch (once per process)"; setOnClickListener { client.enableAfterLaunch { logs.append("\nLaunch result: $it") } } })
         layout.addView(Button(this).apply { text="Enable campaigns"; setOnClickListener { client.enable() } })
         layout.addView(Button(this).apply { text="App foreground"; setOnClickListener { client.foreground() } })
         val name = EditText(this).apply { hint="Screen or event name" }; layout.addView(name)

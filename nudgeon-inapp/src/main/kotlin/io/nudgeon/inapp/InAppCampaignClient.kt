@@ -28,6 +28,7 @@ class InAppCampaignClient(
     private var polling: Job? = null; private var expiry: Job? = null; private var flushing = false
     private var journal: InAppEventJournal? = null
     private var retryAt = 0L; private var failures = 0
+    private var launchDisplaySeconds = 4.0
     private var launchWindow: InAppLaunchWindow? = null
     private var launchTimeout: Job? = null
     private var launchCompletion: ((InAppLaunchResult) -> Unit)? = null
@@ -40,7 +41,9 @@ class InAppCampaignClient(
     }
     /** Call instead of enable(), with a resumed, focused host after its launch screen/consent.
      * One attempt per API/key per process, including Activity/owner recreation. */
-    fun enableAfterLaunch(timeoutSeconds: Double = 3.0, onResult: (InAppLaunchResult) -> Unit = {}): Boolean {
+    fun enableAfterLaunch(timeoutSeconds: Double = 3.0, onResult: (InAppLaunchResult) -> Unit = {}): Boolean =
+        enableAfterLaunch(timeoutSeconds, 4.0, onResult)
+    fun enableAfterLaunch(timeoutSeconds: Double = 3.0, displaySeconds: Double, onResult: (InAppLaunchResult) -> Unit = {}): Boolean {
         main()
         if (enabled) { android.os.Handler(Looper.getMainLooper()).post { onResult(InAppLaunchResult.ALREADY_HANDLED) }; return false }
         enabled = true
@@ -52,6 +55,7 @@ class InAppCampaignClient(
         stop("session_ended"); session = UUID.randomUUID()
         val window = InAppLaunchWindow(timeoutSeconds, monotonicNow())
         launchWindow = window; launchCompletion = onResult
+        launchDisplaySeconds = InAppLaunchWindow.displayDuration(displaySeconds)
         launchTimeout = scope.launch {
             delay((window.deadline - monotonicNow()).coerceAtLeast(0))
             if (launchWindow === window && window.result == null) stop("launch_timeout")
@@ -110,11 +114,11 @@ class InAppCampaignClient(
                 val artifact = response.optJSONObject("delivery")
                 if (artifact == null) { if (current == generation) finishLaunch(InAppLaunchResult.NO_CAMPAIGN); return@launch }
                 val id = artifact.getString("id")
-                if (!enabled || current != generation || activity !== resumed || !isAllowed()) { queue(id,if(artifact.optBoolean("lifecycle_events")) "cancelled" else "failed",if(artifact.optBoolean("lifecycle_events")) "host_blocked" else "HOST_BLOCKED"); if (current == generation) finishLaunch(InAppLaunchResult.BLOCKED); return@launch }
+                if (!enabled || current != generation || activity !== resumed || !isAllowed()) { queue(id,if(artifact.optBoolean("lifecycle_events")) "cancelled" else "failed",if(artifact.optBoolean("lifecycle_events")) { if (launch?.result == InAppLaunchResult.TIMED_OUT) "launch_timeout" else "host_blocked" } else "HOST_BLOCKED"); if (current == generation) finishLaunch(InAppLaunchResult.BLOCKED); return@launch }
                 delivery = id; lifecycleEvents = artifact.optBoolean("lifecycle_events"); validateArtifact(artifact)
                 var presentationTime: Long? = null
                 renderer = InAppRenderer(activity,artifact,configuration.allowedSchemes,configuration.allowedWebHosts,
-                    showHideToday = true, beforeShow = { show -> scope.launch {
+                    showHideToday = launch == null, autoDismissSeconds = if (launch != null) launchDisplaySeconds else null, beforeShow = { show -> scope.launch {
                         try {
                             val authorization = request("deliveries/$id/authorize",JSONObject())
                             if (delivery != id) return@launch

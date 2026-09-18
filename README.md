@@ -8,7 +8,7 @@
 [NudgeOn](https://nudgeon.io) 고객 인게이지먼트 플랫폼의 Android(Kotlin) 네이티브 코어 SDK.
 이벤트를 수집하고 푸시를 수신합니다. 공통 이벤트·식별·푸시 API를 제공합니다.
 
-> **파트너 베타 후보입니다.** 코어와 인앱 모듈 0.2.3은 Maven Central에 공개 배포되어 있습니다.
+> **파트너 베타 후보입니다.** 코어와 인앱 모듈 0.2.4는 Maven Central에 공개 배포되어 있습니다.
 > 플랫폼 전체의 관리형 저장소·목표 부하·24시간 시험과 외부 온보딩 검증은 남아 있습니다.
 > 최신 단말·공급자 검증 범위는 [출시 체크리스트](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)를 확인하세요.
 > 서버·SDK의 공통 메시지 식별자 계약은 아래 푸시 계약 문서를 따릅니다.
@@ -17,13 +17,13 @@
 - **API 가이드** — [docs-public/API.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/API.md)
 - **푸시 계약** — [docs-public/PUSH-CONTRACT.md](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/PUSH-CONTRACT.md)
 - **개발자센터** — [nudgeon.io](https://nudgeon.io)
-- **인앱 웹 소스 테스트** — [nudgeon-inapp 연결 안내](IN-APP-TESTING.md) (0.2.3)
+- **인앱 웹 소스 테스트** — [nudgeon-inapp 연결 안내](IN-APP-TESTING.md) (0.2.4)
 
 ## 설치 (Maven Central)
 
 ```kotlin
 dependencies {
-    implementation("io.nudgeon:nudgeon-sdk:0.2.3")
+    implementation("io.nudgeon:nudgeon-sdk:0.2.4")
 }
 ```
 
@@ -137,12 +137,12 @@ override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(
 [Apache License 2.0](LICENSE). NudgeOn 이름·워드마크·로고는 이 허여 대상이 아닙니다 —
 [상표 정책](TRADEMARKS.md)을 따릅니다.
 
-## 앱 실행 직후 광고 (0.2.3)
+## 앱 실행 직후 광고 (0.2.4)
 
 앱 시작 화면과 동의·라우팅이 끝난 뒤 준비된 화면에서 기존 `enable()` 대신 호출합니다.
 
 ```kotlin
-campaigns.enableAfterLaunch(timeoutSeconds = 3.0) { result ->
+campaigns.enableAfterLaunch(timeoutSeconds = 3.0, displaySeconds = 4.0) { result ->
     // SHOWN / NO_CAMPAIGN / TIMED_OUT / BLOCKED / CANCELLED / FAILED / ALREADY_HANDLED
     Log.d("LaunchAd", result.name)
 }
@@ -152,5 +152,8 @@ campaigns.enableAfterLaunch(timeoutSeconds = 3.0) { result ->
 광고가 없거나 준비가 늦으면 메인 화면을 그대로 사용합니다. 준비 중 `screen()`을 곧바로
 호출하면 시작 시도가 취소됩니다. 객체는 앱 소유자가 보관하고 실제 화면 변경만 전달하세요.
 시작 기회를 이미 사용했어도 이후 화면/이벤트 캠페인은 활성 상태로 유지합니다.
-전면·투명 팝업, 오늘 하루 숨김, 캠페인 시간대·빈도 제한을 재사용합니다.
+시작 광고는 불투명 전면 화면으로 표시되며 실제 표시부터 기본 4초 뒤 자동 종료됩니다.
+`displaySeconds`는 3~5초로 제한되며 닫기·오늘 하루 숨김 버튼 없이 메인으로 넘어갑니다.
+호스트는 메인 UI 앞에 시작 화면을 유지하고 결과 콜백에서 해제합니다. 최대 3초 fallback을 두세요.
+일반 인앱 캠페인의 닫기·숨김 동작과 캠페인 시간대·빈도 제한은 유지됩니다.
 서버/콘솔을 먼저 반영하세요. [전체 계약](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/APP-LAUNCH-ADS.md).

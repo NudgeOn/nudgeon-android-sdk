@@ -28,6 +28,37 @@ class InAppCampaignClient(
     private var polling: Job? = null; private var expiry: Job? = null; private var flushing = false
     private var journal: InAppEventJournal? = null
     private var retryAt = 0L; private var failures = 0
+    private var launchWindow: InAppLaunchWindow? = null
+    private var launchTimeout: Job? = null
+    private var launchCompletion: ((InAppLaunchResult) -> Unit)? = null
+    private fun monotonicNow() = System.nanoTime() / 1_000_000
+    private fun finishLaunch(result: InAppLaunchResult, atMillis: Long = monotonicNow()) {
+        val resolved = launchWindow?.complete(result, atMillis) ?: return
+        launchTimeout?.cancel(); launchTimeout = null
+        val completion = launchCompletion; launchCompletion = null
+        if (completion != null) android.os.Handler(Looper.getMainLooper()).post { completion(resolved) }
+    }
+    /** Call instead of enable(), with a resumed, focused host after its launch screen/consent.
+     * One attempt per API/key per process, including Activity/owner recreation. */
+    fun enableAfterLaunch(timeoutSeconds: Double = 3.0, onResult: (InAppLaunchResult) -> Unit = {}): Boolean {
+        main()
+        if (enabled) { android.os.Handler(Looper.getMainLooper()).post { onResult(InAppLaunchResult.ALREADY_HANDLED) }; return false }
+        enabled = true
+        resumed = host()?.takeIf { !it.isFinishing && !it.isDestroyed }
+        startPolling()
+        if (!InAppLaunchRegistry.process.claim(sha256(configuration.apiUrl + "|" + configuration.sdkKey))) {
+            android.os.Handler(Looper.getMainLooper()).post { onResult(InAppLaunchResult.ALREADY_HANDLED) }; return false
+        }
+        stop("session_ended"); session = UUID.randomUUID()
+        val window = InAppLaunchWindow(timeoutSeconds, monotonicNow())
+        launchWindow = window; launchCompletion = onResult
+        launchTimeout = scope.launch {
+            delay((window.deadline - monotonicNow()).coerceAtLeast(0))
+            if (launchWindow === window && window.result == null) stop("launch_timeout")
+        }
+        trigger(JSONObject().put("type","launch"))
+        return true
+    }
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(activity: Activity) { resumed = activity }
         override fun onActivityPaused(activity: Activity) { if (resumed === activity) { resumed = null; stop("background") } }
@@ -51,6 +82,7 @@ class InAppCampaignClient(
         main(); generation = UUID.randomUUID()
         delivery?.let { val event = terminationEvent(reason, failure, shown, lifecycleEvents); queue(it,event.first,event.second) }
         shown = false; renderer?.close(); renderer = null; delivery = null; expiry?.cancel()
+        finishLaunch(if (reason == "launch_timeout") InAppLaunchResult.TIMED_OUT else if (failure) InAppLaunchResult.FAILED else InAppLaunchResult.CANCELLED)
     }
     fun foreground() { main(); if (!enabled) return; stop("session_ended"); session = UUID.randomUUID(); trigger(JSONObject().put("type","foreground")) }
     fun screen(name: String) { main(); stop("screen_changed"); trigger(JSONObject().put("type","screen").put("name",name)) }
@@ -58,8 +90,12 @@ class InAppCampaignClient(
     suspend fun forgetInstallation() { main(); disable(); runCatching { request("revoke",JSONObject()) }; credential = null; store.clear(); journal?.clear(); journal = null }
     fun destroy() { disable(); application.unregisterActivityLifecycleCallbacks(lifecycle); scope.cancel() }
     private fun trigger(trigger: JSONObject) {
-        val activity = host()?.takeIf { it === resumed && !it.isFinishing && !it.isDestroyed && it.hasWindowFocus() } ?: return
-        if (!enabled || !isAllowed() || busy || renderer != null) return
+        val launch = if (trigger.optString("type") == "launch") launchWindow else null
+        val activity = host()?.takeIf { it === resumed && !it.isFinishing && !it.isDestroyed && it.hasWindowFocus() }
+        if (activity == null || !enabled || !isAllowed() || busy || renderer != null) {
+            if (launch != null) finishLaunch(InAppLaunchResult.BLOCKED)
+            return
+        }
         busy = true; val current = generation; val sessionId = session
         scope.launch {
             try {
@@ -69,28 +105,32 @@ class InAppCampaignClient(
                     val pending = makeJournal(c); store.write(c); credential = c; journal = pending
                 }
                 flush()
+                if (!enabled || current != generation) return@launch
                 val response = request("decisions",JSONObject().put("request_key",UUID.randomUUID()).put("session_id",sessionId).put("trigger",trigger))
-                val artifact = response.optJSONObject("delivery") ?: return@launch
+                val artifact = response.optJSONObject("delivery")
+                if (artifact == null) { if (current == generation) finishLaunch(InAppLaunchResult.NO_CAMPAIGN); return@launch }
                 val id = artifact.getString("id")
-                if (!enabled || current != generation || activity !== resumed || !isAllowed()) { queue(id,if(artifact.optBoolean("lifecycle_events")) "cancelled" else "failed",if(artifact.optBoolean("lifecycle_events")) "host_blocked" else "HOST_BLOCKED"); return@launch }
+                if (!enabled || current != generation || activity !== resumed || !isAllowed()) { queue(id,if(artifact.optBoolean("lifecycle_events")) "cancelled" else "failed",if(artifact.optBoolean("lifecycle_events")) "host_blocked" else "HOST_BLOCKED"); if (current == generation) finishLaunch(InAppLaunchResult.BLOCKED); return@launch }
                 delivery = id; lifecycleEvents = artifact.optBoolean("lifecycle_events"); validateArtifact(artifact)
+                var presentationTime: Long? = null
                 renderer = InAppRenderer(activity,artifact,configuration.allowedSchemes,configuration.allowedWebHosts,
                     showHideToday = true, beforeShow = { show -> scope.launch {
                         try {
                             val authorization = request("deliveries/$id/authorize",JSONObject())
                             if (delivery != id) return@launch
                             if (!enabled || current != generation || activity !== resumed || !isAllowed()) { stop("host_blocked"); return@launch }
+                            if (launch != null && !launch.canPresent(monotonicNow())) { stop("launch_timeout"); return@launch }
                             val millis = Instant.parse(authorization.getString("expires_at")).toEpochMilli() - System.currentTimeMillis()
-                            if (millis <= 0) { stop("display_timeout"); return@launch }; show()
+                            if (millis <= 0) { stop("display_timeout"); return@launch }; presentationTime = monotonicNow(); show()
                             expiry = scope.launch { delay(minOf(millis,290000)); if (delivery == id) stop("display_timeout") }
                         } catch (e: CancellationException) { throw e }
                         catch (_: Exception) { if (delivery == id) stop("DISPLAY_AUTHORIZATION_FAILED",true); onDiagnostic("DISPLAY_AUTHORIZATION_FAILED") }
-                    } }, canPresent = { enabled && generation == current && activity === resumed && isAllowed() },
-                    onEvent = { kind, detail -> if (kind == "presented") shown = true; if(kind == "failed" && detail == "RUN_EXPIRED" && lifecycleEvents) queue(id,"cancelled","display_timeout") else queue(id,kind,detail) },
+                    } }, canPresent = { enabled && generation == current && activity === resumed && isAllowed() && (launch == null || shown || launch.canPresent(monotonicNow())) },
+                    onEvent = { kind, detail -> if (kind == "presented") { shown = true; finishLaunch(InAppLaunchResult.SHOWN, presentationTime ?: monotonicNow()) }; if (kind == "failed") finishLaunch(InAppLaunchResult.FAILED); if(kind == "failed" && detail == "RUN_EXPIRED" && lifecycleEvents) queue(id,"cancelled","display_timeout") else queue(id,kind,detail) },
                     onEnd = { action -> if (delivery == id) { shown = false; renderer = null; delivery = null; expiry?.cancel(); if (action != null) onAction(action) } })
                 renderer!!.prepare()
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (delivery != null) stop("CAMPAIGN_REQUEST_FAILED",true); onDiagnostic("CAMPAIGN_REQUEST_FAILED"); if (e is InAppHttpError && e.status == 401) disable() }
+            catch (e: Exception) { if (current == generation) stop("CAMPAIGN_REQUEST_FAILED",true); onDiagnostic("CAMPAIGN_REQUEST_FAILED"); if (e is InAppHttpError && e.status == 401) disable() }
             finally { busy = false }
         }
     }

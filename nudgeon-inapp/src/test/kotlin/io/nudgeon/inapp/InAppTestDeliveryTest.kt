@@ -45,7 +45,7 @@ class InAppTestDeliveryTest {
     }
     @Test fun failedAcknowledgementWriteCanBeRetried() = runBlocking {
         val store=Store(); val client=store.make(); client.begin("a"); client.append("r","dismiss","")
-        store.fail=true; client.flush({_,_,_->},code)
+        client.flush({_,_,_->store.fail=true},code)
         assertEquals(InAppTestTransferStatus.Phase.FAILED,client.status.phase); assertEquals(0,client.status.acknowledgedCount)
         store.fail=false; client.retryStorage(); assertEquals(1,client.status.acknowledgedCount)
     }
@@ -72,5 +72,34 @@ class InAppTestDeliveryTest {
         assertThrows(IllegalStateException::class.java) { InAppTestStoreLease("test") }
         first.close(); val second=InAppTestStoreLease("test"); first.close()
         assertThrows(IllegalStateException::class.java) { InAppTestStoreLease("test") }; second.close()
+    }
+
+    @Test fun reviewContextAndClocksSurviveRecovery() = runBlocking {
+        var saved: String? = null; var time = 100L
+        fun make() = InAppTestDelivery({saved},{saved=it},{}, {time})
+        val client = make(); client.begin("secret", "2026-09-19T13:30:00Z")
+        client.updateSessionExpiry("2026-09-19T13:35:00Z")
+        client.active("run-a", "revision-a", "2026-09-19T13:05:00Z"); client.append("run-a", "dismiss", "")
+        client.flush({_,_,_->error("offline")},code)
+        assertEquals(100L,client.status.review?.lastAttemptAt); assertNull(client.status.review?.lastReceivedAt)
+        val recovered = make(); assertEquals(client.status.review,recovered.status.review)
+        time = 200L; recovered.flush({_,_,_->},code)
+        val detail = recovered.status.review!!
+        assertEquals("run-a",detail.runId); assertEquals("revision-a",detail.revisionId)
+        assertEquals("2026-09-19T13:35:00Z",detail.sessionExpiresAt); assertEquals("2026-09-19T13:05:00Z",detail.runExpiresAt)
+        assertEquals(200L,detail.lastAttemptAt); assertEquals(200L,detail.lastReceivedAt)
+        assertEquals(detail,make().status.review)
+        recovered.discard(); assertNull(recovered.status.review)
+    }
+    @Test fun oldJournalAndNewRunDoNotInventMetadata() {
+        val store = Store(); store.value = """{"events":[],"closing":false,"acknowledged":1}"""
+        val old = store.make(); assertNull(old.status.review)
+        old.begin("secret"); old.active("r1","v1","expiry"); old.active("r2","v2")
+        assertEquals("r2",old.status.review?.runId); assertNull(old.status.review?.runExpiresAt); assertNull(old.status.review?.lastReceivedAt)
+    }
+    @Test fun attemptStorageFailureDoesNotSend() = runBlocking {
+        val store = Store(); val client = store.make(); client.begin("a"); client.append("r","dismiss","")
+        store.fail = true; client.flush({_,_,_->fail("must persist attempt before transport")},code)
+        assertEquals("STORAGE_ERROR",client.status.reason); assertNull(client.status.review?.lastReceivedAt)
     }
 }

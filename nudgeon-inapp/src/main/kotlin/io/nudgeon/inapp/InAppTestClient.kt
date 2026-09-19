@@ -62,7 +62,7 @@ class InAppTestClient(
         val current = generation
         val result = request("pair", JSONObject().put("token", token).put("label", label.take(80)).put("platform", "android").put("sdk_version", "inapp-test/1"))
         check(current == generation) { "SESSION_CLOSED" }
-        delivery.begin(result.getString("credential"))
+        delivery.begin(result.getString("credential"), result.getString("expires_at"))
         credential = result.getString("credential")
         // A client created from a resumed Activity can start immediately.
         resumed = host()?.takeIf { !it.isFinishing && !it.isDestroyed }
@@ -141,6 +141,7 @@ class InAppTestClient(
                         flush()
                         check(delivery.snapshot.events.isEmpty()) { "PENDING_TEST_RECOVERY" }
                         val commands = request("commands")
+                        delivery.updateSessionExpiry(commands.optString("expires_at").takeIf { it.isNotEmpty() })
                         val run = commands.optJSONObject("run")
                         if (runId != null && run?.optString("id") != runId) contextChanged()
                         if (commands.getString("state") == "active" && run?.optString("state") == "queued" && runId == null) render(run.getString("id"))
@@ -165,7 +166,7 @@ class InAppTestClient(
         try {
             validateArtifact(artifact)
             if (generation != current || activity !== resumed || !isAllowed()) { queue(id, "failed", "HOST_BLOCKED"); return }
-            delivery.active(id)
+            delivery.active(id, artifact.getString("revision_id"), artifact.getString("expires_at"))
             runId = id
             renderer = InAppRenderer(activity, artifact, configuration.allowedSchemes, configuration.allowedWebHosts,
                 canPresent = { generation == current && activity === resumed && isAllowed() },

@@ -18,6 +18,7 @@ class InAppTestClient(
     private val isAllowed: () -> Boolean,
     private val onAction: (InAppAction) -> Unit,
     private val onDiagnostic: (String) -> Unit = {},
+    private val onTransferStatus: (InAppTestTransferStatus) -> Unit = {},
 ) {
     data class Configuration(val apiUrl: String, val sdkKey: String, val allowedSchemes: Set<String> = emptySet(), val allowedWebHosts: Set<String> = emptySet())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -27,8 +28,10 @@ class InAppTestClient(
     private var renderer: InAppRenderer? = null
     private var runId: String? = null
     private var resumed: Activity? = null
-    private data class Event(val run: String, val id: String, val kind: String, val detail: String)
-    private val events = ArrayDeque<Event>()
+    private val storeLease: InAppTestStoreLease
+    private val delivery: InAppTestDelivery
+    private var transferJob: Job? = null
+    val transferStatus: InAppTestTransferStatus get() = delivery.status
     private val lifecycle = object : Application.ActivityLifecycleCallbacks {
         override fun onActivityResumed(activity: Activity) { resumed = activity }
         override fun onActivityPaused(activity: Activity) { if (resumed === activity) { resumed = null; contextChanged() } }
@@ -42,14 +45,24 @@ class InAppTestClient(
         val uri = URI(configuration.apiUrl)
         require(uri.scheme == "https" || (uri.scheme == "http" && uri.host in setOf("localhost", "127.0.0.1", "10.0.2.2"))) { "HTTPS required" }
         require(uri.userInfo == null && uri.query == null && uri.fragment == null)
+        val namespace = "test-" + java.security.MessageDigest.getInstance("SHA-256")
+            .digest((configuration.apiUrl + "\n" + configuration.sdkKey).toByteArray()).joinToString("") { "%02x".format(it) }
+        val store = InAppInstallationStore(application, namespace)
+        storeLease = InAppTestStoreLease(namespace)
+        delivery = try { InAppTestDelivery({ store.read() }, { store.write(it) }, onTransferStatus) }
+        catch (e: Exception) { storeLease.close(); throw e }
         application.registerActivityLifecycleCallbacks(lifecycle)
+        startTransfer()
     }
     private fun mainThread() { check(Looper.myLooper() == Looper.getMainLooper()) }
     /** Call after explicit user consent; show the returned confirmation number next to the console number. */
     suspend fun pair(token: String, label: String = "Android test device"): InAppPairing {
-        mainThread(); end(); val current = generation
+        mainThread(); end(); flush()
+        check(!delivery.needsRecovery && !delivery.sending) { "PENDING_TEST_RECOVERY" }
+        val current = generation
         val result = request("pair", JSONObject().put("token", token).put("label", label.take(80)).put("platform", "android").put("sdk_version", "inapp-test/1"))
         check(current == generation) { "SESSION_CLOSED" }
+        delivery.begin(result.getString("credential"))
         credential = result.getString("credential")
         // A client created from a resumed Activity can start immediately.
         resumed = host()?.takeIf { !it.isFinishing && !it.isDestroyed }
@@ -74,20 +87,51 @@ class InAppTestClient(
                 }
             }.show()
     }
+    /** Stops presentation immediately; receipt failures stay durably queued. */
     fun end() {
-        mainThread(); val old = credential; credential = null; generation = UUID.randomUUID().toString()
-        polling?.cancel(); polling = null; renderer?.close(); renderer = null; runId = null; events.clear()
-        if (old != null) scope.launch { runCatching { request("end", JSONObject(), old) } }
+        mainThread(); credential = null; generation = UUID.randomUUID().toString()
+        polling?.cancel(); polling = null; renderer?.close(); renderer = null; runId = null
+        try { delivery.close() } catch (_: Exception) { onDiagnostic("TEST_STORAGE_ERROR"); return }
+        startTransfer()
+    }
+    /** Upload stored records only. Never resumes commands or displays an old ad. */
+    fun retryPendingEvents() {
+        mainThread()
+        try { delivery.retryStorage() } catch (_: Exception) { onDiagnostic("TEST_STORAGE_ERROR"); return }
+        scope.launch { flush(); startTransfer() }
+    }
+    /** Explicit abandonment, never represented as server receipt. */
+    fun discardPendingEvents() {
+        mainThread(); val old=delivery.snapshot.credential
+        credential=null; generation=UUID.randomUUID().toString(); polling?.cancel(); polling=null
+        renderer?.close(); renderer=null; runId=null
+        try { delivery.discard() } catch (_: Exception) { onDiagnostic("TEST_STORAGE_ERROR"); return }
+        if(old!=null) scope.launch { runCatching { request("end",JSONObject(),old) } }
     }
     /** Call on identity, consent or screen eligibility changes. */
     fun contextChanged() {
         mainThread(); generation = UUID.randomUUID().toString()
         runId?.let { queue(it, "failed", "CONTEXT_CHANGED") }; renderer?.close(); renderer = null; runId = null
     }
-    fun destroy() { end(); application.unregisterActivityLifecycleCallbacks(lifecycle); scope.cancel() }
+    fun destroy() { end(); application.unregisterActivityLifecycleCallbacks(lifecycle); scope.cancel(); storeLease.close() }
     private fun queue(run: String, kind: String, detail: String = "") {
-        if (events.size < 200) events.addLast(Event(run, UUID.randomUUID().toString(), kind, detail.take(200)))
+        try { delivery.append(run,kind,detail); startTransfer() } catch (_: Exception) { onDiagnostic("TEST_STORAGE_ERROR") }
         onDiagnostic("$kind:$detail")
+    }
+    private fun startTransfer() {
+        if (transferJob!=null || !delivery.canRetry || (delivery.snapshot.events.isEmpty() && !delivery.snapshot.closing)) return
+        val job=scope.launch(start=CoroutineStart.LAZY) {
+            var wait=1000L
+            try {
+                while(isActive) {
+                    flush()
+                    if(!delivery.canRetry || (delivery.snapshot.events.isEmpty() && !delivery.snapshot.closing)) break
+                    delay(wait); wait=(wait*2).coerceAtMost(30000)
+                }
+            } finally { transferJob=null }
+        }
+        transferJob=job
+        job.start()
     }
     private fun startPolling() {
         polling?.cancel(); polling = scope.launch {
@@ -95,6 +139,7 @@ class InAppTestClient(
                 try {
                     if (resumed != null) {
                         flush()
+                        check(delivery.snapshot.events.isEmpty()) { "PENDING_TEST_RECOVERY" }
                         val commands = request("commands")
                         val run = commands.optJSONObject("run")
                         if (runId != null && run?.optString("id") != runId) contextChanged()
@@ -108,12 +153,9 @@ class InAppTestClient(
         }
     }
     private suspend fun flush() {
-        while (events.isNotEmpty()) {
-            val e = events.first()
-            try { request("runs/${e.run}/events", JSONObject().put("event_id", e.id).put("kind", e.kind).put("detail", e.detail)) }
-            catch (error: InAppHttpError) { if (error.status !in setOf(404,409)) throw error }
-            if (events.firstOrNull()?.id == e.id) events.removeFirst()
-        }
+        delivery.flush({ path,body,token ->
+            check(request(path,body,token).optBoolean("ok",false)) { "INVALID_RECEIPT" }
+        }, { (it as? InAppHttpError)?.status })
     }
     private suspend fun render(id: String) {
         val activity = host()?.takeIf { it === resumed && !it.isFinishing && !it.isDestroyed } ?: return
@@ -123,6 +165,7 @@ class InAppTestClient(
         try {
             validateArtifact(artifact)
             if (generation != current || activity !== resumed || !isAllowed()) { queue(id, "failed", "HOST_BLOCKED"); return }
+            delivery.active(id)
             runId = id
             renderer = InAppRenderer(activity, artifact, configuration.allowedSchemes, configuration.allowedWebHosts,
                 canPresent = { generation == current && activity === resumed && isAllowed() },

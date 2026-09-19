@@ -5,21 +5,30 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+/** Non-secret context for the latest run; receipt time is the device observation, not server time. */
+data class InAppTestReviewDetails(
+    val runId: String? = null, val revisionId: String? = null,
+    val sessionExpiresAt: String? = null, val runExpiresAt: String? = null,
+    val lastAttemptAt: Long? = null, val lastReceivedAt: Long? = null,
+)
+
 /** Telemetry receipt, not content-review approval. All callbacks run on the main thread. */
 data class InAppTestTransferStatus(
     val phase: Phase, val pendingCount: Int, val acknowledgedCount: Int,
     val reason: String? = null, val canEndSafely: Boolean = false,
+    val review: InAppTestReviewDetails? = null,
 ) { enum class Phase { IDLE, PENDING, SENDING, ACKNOWLEDGED, FAILED } }
 
 /** One encrypted snapshot per API/key, with stable event IDs across retries and restarts. */
 internal class InAppTestDelivery(
     read: () -> String?, private val write: (String) -> Unit,
     private val changed: (InAppTestTransferStatus) -> Unit,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     data class Event(val id: String, val run: String, val kind: String, val detail: String)
     data class Snapshot(val credential: String? = null, val events: List<Event> = emptyList(),
         val activeRun: String? = null, val closing: Boolean = false, val acknowledged: Int = 0,
-        val terminalError: String? = null)
+        val terminalError: String? = null, val review: InAppTestReviewDetails? = null)
     var snapshot = Snapshot(); private set
     private var storageFailed = false
     private var pendingWrite: Snapshot? = null
@@ -36,7 +45,12 @@ internal class InAppTestDelivery(
             snapshot = Snapshot(obj.optString("credential").takeIf { it.isNotEmpty() },
                 (0 until rows.length()).map { n -> rows.getJSONObject(n).let { Event(it.getString("id"),it.getString("run"),it.getString("kind"),it.getString("detail")) } },
                 obj.optString("activeRun").takeIf { it.isNotEmpty() }, obj.optBoolean("closing"), obj.optInt("acknowledged"),
-                obj.optString("terminalError").takeIf { it.isNotEmpty() })
+                obj.optString("terminalError").takeIf { it.isNotEmpty() },
+                obj.optJSONObject("review")?.let { r -> InAppTestReviewDetails(
+                    r.optString("runId").takeIf { it.isNotEmpty() }, r.optString("revisionId").takeIf { it.isNotEmpty() },
+                    r.optString("sessionExpiresAt").takeIf { it.isNotEmpty() }, r.optString("runExpiresAt").takeIf { it.isNotEmpty() },
+                    if(r.has("lastAttemptAt")) r.getLong("lastAttemptAt") else null,
+                    if(r.has("lastReceivedAt")) r.getLong("lastReceivedAt") else null) })
         }
         if (needsRecovery) {
             var next = snapshot.copy(closing = true)
@@ -48,12 +62,20 @@ internal class InAppTestDelivery(
         }
         publish()
     }
-    fun begin(credential: String) {
+    fun begin(credential: String, sessionExpiresAt: String? = null) {
         check(!sending && !needsRecovery && !storageFailed) { "PENDING_TEST_RECOVERY" }
-        commit(Snapshot(credential=credential)); epoch = UUID.randomUUID().toString(); publish()
+        commit(Snapshot(credential=credential, review=InAppTestReviewDetails(sessionExpiresAt=sessionExpiresAt))); epoch = UUID.randomUUID().toString(); publish()
     }
     fun retryStorage() { pendingWrite?.let { commit(it); publish() } }
-    fun active(run: String) { check(!storageFailed); commit(snapshot.copy(activeRun=run)); publish() }
+    fun updateSessionExpiry(value: String?) {
+        if(value == null || !needsRecovery || value == snapshot.review?.sessionExpiresAt) return
+        check(!storageFailed)
+        commit(snapshot.copy(review=(snapshot.review ?: InAppTestReviewDetails()).copy(sessionExpiresAt=value))); publish()
+    }
+    fun active(run: String, revisionId: String? = null, expiresAt: String? = null) {
+        check(!storageFailed)
+        commit(snapshot.copy(activeRun=run, review=InAppTestReviewDetails(run,revisionId,snapshot.review?.sessionExpiresAt,expiresAt))); publish()
+    }
     fun append(run: String, kind: String, detail: String) {
         check(!storageFailed) { "STORAGE_ERROR" }
         check(needsRecovery)
@@ -76,9 +98,13 @@ internal class InAppTestDelivery(
         try {
             while (snapshot.events.isNotEmpty()) {
                 val e = snapshot.events.first()
+                val review = snapshot.review ?: InAppTestReviewDetails(runId=e.run)
+                commit(snapshot.copy(review=review.copy(runId=review.runId ?: e.run,lastAttemptAt=now())))
+                publish(InAppTestTransferStatus.Phase.SENDING)
                 send("runs/${e.run}/events", JSONObject().put("event_id",e.id).put("kind",e.kind).put("detail",e.detail),token)
                 if (current!=epoch) return
-                commit(snapshot.copy(events=snapshot.events.filter { it.id!=e.id },acknowledged=snapshot.acknowledged+1))
+                commit(snapshot.copy(events=snapshot.events.filter { it.id!=e.id },acknowledged=snapshot.acknowledged+1,
+                    review=snapshot.review?.copy(lastReceivedAt=now())))
                 publish(InAppTestTransferStatus.Phase.SENDING)
             }
             if (snapshot.closing) {
@@ -104,10 +130,13 @@ internal class InAppTestDelivery(
     private fun commit(next: Snapshot) {
         val rows=JSONArray()
         next.events.forEach { e -> rows.put(JSONObject().put("id",e.id).put("run",e.run).put("kind",e.kind).put("detail",e.detail)) }
+        val review = next.review?.let { r -> JSONObject().put("runId",r.runId ?: "").put("revisionId",r.revisionId ?: "")
+            .put("sessionExpiresAt",r.sessionExpiresAt ?: "").put("runExpiresAt",r.runExpiresAt ?: "")
+            .apply { r.lastAttemptAt?.let { put("lastAttemptAt",it) }; r.lastReceivedAt?.let { put("lastReceivedAt",it) } } }
         try {
             write(JSONObject().put("credential",next.credential ?: "").put("events",rows)
                 .put("activeRun",next.activeRun ?: "").put("closing",next.closing)
-                .put("acknowledged",next.acknowledged).put("terminalError",next.terminalError ?: "").toString())
+                .put("review",review).put("acknowledged",next.acknowledged).put("terminalError",next.terminalError ?: "").toString())
             snapshot=next; pendingWrite=null; storageFailed=false
         } catch (e: Exception) { pendingWrite=next; storageFailed=true; publish(InAppTestTransferStatus.Phase.FAILED,"STORAGE_ERROR"); throw e }
     }
@@ -118,7 +147,7 @@ internal class InAppTestDelivery(
             snapshot.acknowledged>0 -> InAppTestTransferStatus.Phase.ACKNOWLEDGED
             else -> InAppTestTransferStatus.Phase.IDLE }
         status=InAppTestTransferStatus(phase ?: inferred,snapshot.events.size,snapshot.acknowledged,error,
-            error==null && !sending && snapshot.events.isEmpty() && snapshot.activeRun==null && !snapshot.closing)
+            error==null && !sending && snapshot.events.isEmpty() && snapshot.activeRun==null && !snapshot.closing,snapshot.review)
         changed(status)
     }
 }

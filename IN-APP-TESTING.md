@@ -1,4 +1,4 @@
-# In-app module (0.2.5)
+# In-app module (0.2.6)
 
 `nudgeon-inapp` is an optional Android API 26+ module. Available on Maven Central starting with 0.2.0 as `io.nudgeon:nudgeon-inapp`. It connects to the NudgeOn source workbench and never enables production campaigns automatically.
 
@@ -57,8 +57,8 @@ Create and retain one test client per API URL + SDK key on the main thread, incl
 Live campaign events are written atomically to an installation-scoped journal before sending (up to 1,000 records, seven-day retention). They replay in order with stable event IDs after restart; transient failures use exponential backoff up to 60 seconds plus jitter. The server accepts historical events for seven days without reopening an expired or paused delivery. Permanent 400/404/409 responses discard that event; 401 disables the client without rotating installation identity. Storage failures emit `EVENT_STORAGE_FAILED`. `forgetInstallation` clears the journal. Test-pairing delivery is protected separately as described above; new commands require reconnecting after restart.
 
 ```kotlin
-implementation("io.nudgeon:nudgeon-sdk:0.2.5")
-implementation("io.nudgeon:nudgeon-inapp:0.2.5")
+implementation("io.nudgeon:nudgeon-sdk:0.2.6")
+implementation("io.nudgeon:nudgeon-inapp:0.2.6")
 ```
 
 ## HTML 안의 오늘 하루 안 보기 (0.2.1+)
@@ -74,3 +74,11 @@ implementation("io.nudgeon:nudgeon-inapp:0.2.5")
 라이브 캠페인의 백그라운드·화면/세션/표시 조건 변경·비활성화·서버 중지·기간 만료는 `cancelled`와 사유로 전송하며 실제 렌더링/통신 오류는 `failed`로 유지합니다. 구 서버에서는 표시 후 정상 종료를 `dismiss`, 표시 전 중단을 `failed(HOST_BLOCKED)`로 보내 호환성을 유지합니다. 테스트 연결의 로그와는 별도입니다.
 
 검증: iPhone 15 Pro/iOS 27 및 Fold3/Android 15에서 KST 숨김 만료·실제 자정 후 재노출, 정상 중단, 수정 예제 레이아웃 확인. [플랫폼 검증 기록](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/IN-APP-DEVICE-QA-2026-09-17.md)을 참고하세요.
+
+## Review details (0.2.6)
+
+`onTransferStatus` also exposes optional `review` context. The latest run and source revision identify the same console review after restart. `sessionExpiresAt` comes from pairing and is refreshed from server commands after device confirmation; `runExpiresAt` comes from the claimed artifact. These are server-provided ISO-8601 strings, not a new retry guarantee. The server still decides whether a record is valid.
+
+`lastAttemptAt` and `lastReceivedAt` are device-clock observations of telemetry requests and successful responses (Swift `Date?`; Android epoch milliseconds `Long?`). They are not server timestamps. Format with an explicit time zone; the complete example uses `Asia/Seoul` and labels KST. `acknowledgedCount` remains cumulative for the test session, while review context describes the latest run. Old journals may have missing fields: show “not recorded”, never invent a timestamp or revision.
+
+Copy only the run ID to locate it in Console → In-app campaigns → Review → Find by run ID. Compare the full revision and OS before approving. The console searches the current app’s latest 50 runs; a missing older run requires a new review. Neither copying nor selecting an ID approves or publishes anything. Keep credentials and SDK keys out of copied text and URLs.

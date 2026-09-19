@@ -1,4 +1,4 @@
-# In-app module (0.2.4)
+# In-app module (0.2.5)
 
 `nudgeon-inapp` is an optional Android API 26+ module. Available on Maven Central starting with 0.2.0 as `io.nudgeon:nudgeon-inapp`. It connects to the NudgeOn source workbench and never enables production campaigns automatically.
 
@@ -11,13 +11,14 @@ val client = InAppTestClient(
     ),
     host = { currentActivity },
     isAllowed = { mayShowEvent },
-    onAction = { action -> /* route action.url with the app router */ }
+    onAction = { action -> /* route action.url with the app router */ },
+    onTransferStatus = { status -> /* update receipt UI using status.phase and pendingCount */ }
 )
 // Main thread, app-owned debug/settings action after the person requests a test:
 client.showConnection(currentActivity)
 ```
 
-Paste the console pairing code, compare the displayed number and confirm in the console. Keep the app open. Connection lasts 30 minutes; test credentials remain in memory. Call `contextChanged()` on identity/consent/screen changes, `end()` to disconnect, and `destroy()` when the owning app component is disposed.
+Paste the console pairing code, compare the displayed number and confirm in the console. Keep the app open. Connection lasts 30 minutes; pending telemetry and its credential are protected with Android Keystore AES/GCM in no-backup storage. Call `contextChanged()` on identity/consent/screen changes, `end()` to disconnect, and `destroy()` when the owning app component is disposed.
 
 WebView must support `WEB_MESSAGE_LISTENER`. The module never falls back to an unrestricted JavascriptInterface. Native close/back, Activity changes and a five-minute watchdog can dismiss without JavaScript permission. HTTPS content and deep-link targets require explicit host/scheme allow lists. No push token is needed. HTML never receives the SDK key or test credential.
 
@@ -31,6 +32,20 @@ Source formats, server setup and complete test flow are documented in `nudgeon-p
 
 The sample app includes an **In-app event test** button and `InAppTestActivity`. Its action handler logs the validated destination, so testing does not unexpectedly navigate away. The API/key come from the sample app’s existing local.properties or Gradle configuration.
 
+## Reliable review delivery (0.2.5)
+
+Create and retain one test client per API URL + SDK key on the main thread, including after app restart, to recover pending records. A second simultaneous owner is rejected. Constructor storage errors must be surfaced; do not report a successful review when protected storage is unavailable.
+
+`onTransferStatus` runs on the main thread and reports `phase`, `pendingCount`, `acknowledgedCount`, `reason`, and `canEndSafely`. Show **waiting → sending → server confirmed**, or **failed** with retry. Acknowledged counts refer to this test session's accepted telemetry, not review approval. Native Close is still required for the normal content-review path; approve the matching revision/platform in the console separately.
+
+- `end()` stops presentation, persists closure, sends all queued records, then ends the server session. It does not discard failed records. Monitor status rather than treating return from `end()` as a receipt.
+- `retryPendingEvents()` retries uploads/storage only. It never presents an ad. Automatic transient retries back off from 1 to 30 seconds while the process can run; the OS may suspend background work.
+- `discardPendingEvents()` deliberately deletes pending telemetry and attempts to end the old session. Require an explicit user choice; discard never counts as acknowledgement. Perform a new review after abandonment.
+- The encrypted snapshot holds at most 200 records (one slot reserved for interruption). IDs survive lost responses and restart, allowing server deduplication. Pairing codes are not stored; the short-lived credential is retained only to finish uploads/closure.
+- On restart, an interrupted active run gets one `failed / PROCESS_RESTARTED` record. Rendering and command polling do not resume. Finish recovery or explicitly discard before pairing again.
+- The server's 30-minute test credential and five-minute active-run lease still apply. Expired/revoked sessions and cancelled/expired runs can reject delayed records. Permanent HTTP 400/401/403/404/409/410/422, queue-full and storage failures are shown as failures, never successful receipts. Start a new review after resolving/discarding these records. Durable storage does not extend server validity.
+- No guarantee covers events before a successful storage write, app uninstall, explicit discard, or a server that has already invalidated the review. Production campaign telemetry has a separate contract below.
+
 ## 운영 캠페인 모듈 (0.2.0)
 
 `InAppCampaignClient`는 테스트 페어링 없이 게시된 공개 콘텐츠를 조회합니다. 설치 자격은 기기 보호 저장소에 보관하고, 기간·트리거·빈도 제한을 서버에서 확인합니다. 호스트가 표시 허용, 화면/이벤트, 계정·동의 변경을 연결해야 합니다.
@@ -39,11 +54,11 @@ The sample app includes an **In-app event test** button and `InAppTestActivity`.
 
 ## Durable campaign telemetry
 
-Live campaign events are written atomically to an installation-scoped journal before sending (up to 1,000 records, seven-day retention). They replay in order with stable event IDs after restart; transient failures use exponential backoff up to 60 seconds plus jitter. The server accepts historical events for seven days without reopening an expired or paused delivery. Permanent 400/404/409 responses discard that event; 401 disables the client without rotating installation identity. Storage failures emit `EVENT_STORAGE_FAILED`. `forgetInstallation` clears the journal. Test-pairing sessions remain memory-only and require reconnecting after restart.
+Live campaign events are written atomically to an installation-scoped journal before sending (up to 1,000 records, seven-day retention). They replay in order with stable event IDs after restart; transient failures use exponential backoff up to 60 seconds plus jitter. The server accepts historical events for seven days without reopening an expired or paused delivery. Permanent 400/404/409 responses discard that event; 401 disables the client without rotating installation identity. Storage failures emit `EVENT_STORAGE_FAILED`. `forgetInstallation` clears the journal. Test-pairing delivery is protected separately as described above; new commands require reconnecting after restart.
 
 ```kotlin
-implementation("io.nudgeon:nudgeon-sdk:0.2.4")
-implementation("io.nudgeon:nudgeon-inapp:0.2.4")
+implementation("io.nudgeon:nudgeon-sdk:0.2.5")
+implementation("io.nudgeon:nudgeon-inapp:0.2.5")
 ```
 
 ## HTML 안의 오늘 하루 안 보기 (0.2.1+)

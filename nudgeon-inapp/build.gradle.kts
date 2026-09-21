@@ -1,6 +1,6 @@
 plugins { id("com.android.library"); id("org.jetbrains.kotlin.android"); id("maven-publish"); id("signing") }
 group = "io.nudgeon"
-version = "0.2.6"
+version = "0.2.7"
 android {
     namespace = "io.nudgeon.inapp"
     compileSdk = 34

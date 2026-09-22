@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "io.nudgeon"
-version = "0.2.7"
+version = "0.2.8"
 
 android {
     namespace = "io.nudgeon.sdk"

@@ -8,7 +8,7 @@
 [NudgeOn](https://nudgeon.io) 고객 인게이지먼트 플랫폼의 Android(Kotlin) 네이티브 코어 SDK.
 이벤트를 수집하고 푸시를 수신합니다. 공통 이벤트·식별·푸시 API를 제공합니다.
 
-> **파트너 베타 후보입니다.** 코어와 인앱 모듈 0.2.7는 Maven Central에 공개 배포되어 있습니다.
+> **파트너 베타 후보입니다.** 코어와 인앱 모듈 0.2.8는 Maven Central에 공개 배포되어 있습니다.
 > 플랫폼 전체의 관리형 저장소·목표 부하·24시간 시험과 외부 온보딩 검증은 남아 있습니다.
 > 최신 단말·공급자 검증 범위는 [출시 체크리스트](https://github.com/NudgeOn/nudgeon-platform/blob/main/docs-public/RELEASE-CHECKLIST.md)를 확인하세요.
 > 서버·SDK의 공통 메시지 식별자 계약은 아래 푸시 계약 문서를 따릅니다.
@@ -19,6 +19,44 @@
 - **개발자센터** — [nudgeon.io](https://nudgeon.io)
 - **인앱 웹 소스 테스트** — [nudgeon-inapp 연결 안내](IN-APP-TESTING.md) (0.2.7)
 
+
+## 기본 사용자 속성 (0.2.8+)
+
+`NudgeOnAttributes`는 `setUserAttributes`에 전달할 키 상수입니다. 키 상수는 0.2.8부터 제공됩니다. 이전 버전에서는 문자열 키를 사용할 수 있습니다. SDK 초기화 후 `identify`를 먼저 호출하세요. 식별 전 속성 설정은 현재 지원하지 않습니다.
+
+```kotlin
+import io.nudgeon.sdk.NudgeOnAttributes
+
+NudgeOn.identify("user-123")
+NudgeOn.setUserAttributes(mapOf(
+    NudgeOnAttributes.FIRST_NAME to "Minji",
+    NudgeOnAttributes.EMAIL to "minji@example.com",
+    NudgeOnAttributes.DOB to "1995-03-15",
+    NudgeOnAttributes.COUNTRY to "KR",
+    NudgeOnAttributes.TIMEZONE to "Asia/Seoul",
+    "membership_level" to "gold"
+))
+// Delete a value:
+NudgeOn.setUserAttributes(mapOf(NudgeOnAttributes.PHONE to null))
+```
+
+| 상수 | 전송 키 | 예시 |
+|---|---|---|
+| `NudgeOnAttributes.FIRST_NAME` | `first_name` | `Minji` |
+| `NudgeOnAttributes.LAST_NAME` | `last_name` | `Kim` |
+| `NudgeOnAttributes.EMAIL` | `email` | `minji@example.com` |
+| `NudgeOnAttributes.PHONE` | `phone` | `+821012345678` |
+| `NudgeOnAttributes.DOB` | `dob` | `1995-03-15` |
+| `NudgeOnAttributes.GENDER` | `gender` | `F` |
+| `NudgeOnAttributes.HOME_CITY` | `home_city` | `Seoul` |
+| `NudgeOnAttributes.COUNTRY` | `country` | `KR` |
+| `NudgeOnAttributes.LANGUAGE` | `language` | `ko` |
+| `NudgeOnAttributes.TIMEZONE` | `timezone` | `Asia/Seoul` |
+| `NudgeOnAttributes.CREATED_AT` | `created_at` | `2026-09-22T00:00:00Z` |
+
+생일은 `YYYY-MM-DD` 문자열, 가입일은 시간대가 있는 RFC 3339 문자열을 사용합니다. 전화번호는 E.164, 국가·언어는 `KR`·`ko` 같은 코드, 시간대는 IANA 이름을 권장합니다. `gender` 권장 코드는 `M`, `F`, `O`, `N`, `P`, `U`입니다. Braze `time_zone`은 기존 NudgeOn 키 `timezone`으로 전달합니다.
+
+값은 자동 수집·변환하지 않으며 커스텀 키도 지원합니다. `null`은 값을 삭제합니다. 현재 속성 전송은 네트워크 요청이며 이벤트 오프라인 큐의 영속 재시도 보장을 제공하지 않습니다. 실패에 대비한 재동기화는 앱에서 수행하세요. 푸시 수신 동의는 `setPushSubscription`을 사용하며 `push_subscribe` 같은 일반 속성으로 변경하지 않습니다.
 
 ## 기본 이벤트 (Standard events — 0.2.7+)
 
@@ -58,7 +96,7 @@ NudgeOn.track(NudgeOnEvents.PURCHASE_COMPLETED, mapOf(
 
 ```kotlin
 dependencies {
-    implementation("io.nudgeon:nudgeon-sdk:0.2.7")
+    implementation("io.nudgeon:nudgeon-sdk:0.2.8")
 }
 ```
 

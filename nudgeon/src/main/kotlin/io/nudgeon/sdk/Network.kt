@@ -42,7 +42,8 @@ internal class Network(
         val body = JSONObject().apply {
             put("external_id", externalId)
             put("anon_id", anonId)
-            put("attributes", JSONObject(attributes))
+            // Explicit JSON null means unset; a nullable map entry may otherwise be omitted.
+            put("attributes", JSONObject(attributes.mapValues { (_, value) -> value ?: JSONObject.NULL }))
         }
         post("/v1/identify", body, completion)
     }

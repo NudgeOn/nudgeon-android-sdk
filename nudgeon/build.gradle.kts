@@ -97,6 +97,7 @@ dependencies {
     // 기본 FCM 서비스용. compileOnly — 위임 API만 쓰는 앱엔 Firebase 강제 안 함 (PRD-01A 3.2).
     compileOnly("com.google.firebase:firebase-messaging:24.0.0")
 
+    testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // 단위 테스트에서 org.json 실제 구현 (android.jar 스텁 회피)
 }

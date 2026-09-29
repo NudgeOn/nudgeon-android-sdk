@@ -1,15 +1,16 @@
 package io.nudgeon.sdk
 
+import android.database.DatabaseErrorHandler
+import android.database.sqlite.SQLiteDatabase
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
 /**
- * 오프라인 영속 이벤트 큐 (PRD-01 7.2). 앱 킬·오프라인에도 유실 없음. iOS EventQueue와 대칭.
- * MVP: 파일 기반 JSON 영속. 상한 1000건(초과 시 oldest drop). 내부 동기화로 접근 보호.
+ * SQLite FIFO with a 1000-event oldest-drop limit. Legacy JSON is imported exactly once.
+ * Opens lazily on the SDK worker; no database or migration I/O during SDK construction.
  */
-internal class EventQueue(private val file: File) {
-
+internal class EventQueue(private val file: File) : AutoCloseable {
     data class Item(
         val insertId: String,
         val event: String,
@@ -21,41 +22,116 @@ internal class EventQueue(private val file: File) {
 
     private val maxItems = 1000
     private val lock = Any()
-    private val items: MutableList<Item> = load()
+    private val databaseFile = File(file.parentFile, file.nameWithoutExtension + ".sqlite")
+    private var database: SQLiteDatabase? = null
 
-    fun enqueue(item: Item) = synchronized(lock) {
-        items.add(item)
-        if (items.size > maxItems) {
-            repeat(items.size - maxItems) { items.removeAt(0) } // oldest drop
+    fun enqueue(item: Item): Boolean = perform(false) { db ->
+        transaction(db) {
+            insert(db, item)
+            trim(db)
         }
-        persist()
+        true
     }
 
-    /** 최대 batchSize건을 꺼내 반환(제거하지 않음 — 전송 성공 후 ack로 제거). */
-    fun peek(batchSize: Int): List<Item> = synchronized(lock) {
-        items.take(batchSize)
+    /** Reading does not acknowledge; failed network delivery leaves rows intact. */
+    fun peek(batchSize: Int): List<Item> {
+        if (batchSize <= 0) return emptyList()
+        return perform(emptyList()) { db ->
+            db.rawQuery("SELECT payload FROM events ORDER BY sequence LIMIT ?", arrayOf(batchSize.toString())).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(itemFromJson(JSONObject(cursor.getString(0))))
+                }
+            }
+        }
     }
 
-    /** 전송 성공한 insertId들을 제거. */
-    fun ack(insertIds: Set<String>) = synchronized(lock) {
-        items.removeAll { it.insertId in insertIds }
-        persist()
+    fun ack(insertIds: Set<String>): Boolean {
+        if (insertIds.isEmpty()) return true
+        return perform(false) { db ->
+            transaction(db) {
+                db.compileStatement("DELETE FROM events WHERE insert_id = ?").use { statement ->
+                    for (id in insertIds) {
+                        statement.bindString(1, id)
+                        statement.executeUpdateDelete()
+                    }
+                }
+            }
+            true
+        }
     }
 
-    val count: Int get() = synchronized(lock) { items.size }
+    val count: Int get() = perform(0) { db -> scalar(db, "SELECT count(*) FROM events") }
 
-    private fun persist() {
-        val arr = JSONArray()
-        for (it in items) arr.put(it.toJson())
-        runCatching { file.writeText(arr.toString()) }
+    override fun close() = synchronized(lock) {
+        database?.close()
+        database = null
     }
 
-    private fun load(): MutableList<Item> {
-        if (!file.exists()) return mutableListOf()
-        return runCatching {
-            val arr = JSONArray(file.readText())
-            MutableList(arr.length()) { i -> itemFromJson(arr.getJSONObject(i)) }
-        }.getOrDefault(mutableListOf())
+    private fun <T> perform(fallback: T, block: (SQLiteDatabase) -> T): T = synchronized(lock) {
+        try {
+            block(openIfNeeded())
+        } catch (_: Exception) {
+            // Do not log payloads or silently delete/recreate the DB. Later calls retry opening.
+            NudgeOnLog.warn("Event queue storage operation failed; persisted data retained")
+            fallback
+        }
+    }
+
+    private fun openIfNeeded(): SQLiteDatabase {
+        database?.let { return it }
+        databaseFile.parentFile?.mkdirs()
+        // Android's default corruption handler deletes the database; retain it for recovery instead.
+        val db = SQLiteDatabase.openDatabase(databaseFile.absolutePath, null,
+            SQLiteDatabase.CREATE_IF_NECESSARY or SQLiteDatabase.NO_LOCALIZED_COLLATORS,
+            DatabaseErrorHandler { throw IllegalStateException("Event queue database is corrupt") })
+        try {
+            db.execSQL("PRAGMA synchronous = FULL")
+            transaction(db) {
+                check(db.version <= 1) { "Unsupported event queue database version" }
+                db.execSQL("CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, insert_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS queue_metadata (key TEXT PRIMARY KEY NOT NULL)")
+                if (scalar(db, "SELECT count(*) FROM queue_metadata WHERE key = 'legacy_json_imported'") == 0) {
+                    if (file.exists()) {
+                        val items = JSONArray(file.readText())
+                        for (i in 0 until items.length()) insert(db, itemFromJson(items.getJSONObject(i)))
+                    }
+                    trim(db)
+                    db.execSQL("INSERT INTO queue_metadata (key) VALUES ('legacy_json_imported')")
+                }
+                db.version = 1
+            }
+            // Import and marker are already committed. Failure to delete cannot replay old events.
+            if (file.exists()) file.delete()
+            database = db
+            return db
+        } catch (error: Exception) {
+            db.close()
+            throw error
+        }
+    }
+
+    private fun insert(db: SQLiteDatabase, item: Item) {
+        db.execSQL("INSERT OR IGNORE INTO events (insert_id, payload) VALUES (?, ?)",
+            arrayOf(item.insertId, item.toJson().toString()))
+    }
+
+    private fun trim(db: SQLiteDatabase) {
+        db.execSQL("DELETE FROM events WHERE sequence NOT IN (SELECT sequence FROM events ORDER BY sequence DESC LIMIT $maxItems)")
+    }
+
+    private fun transaction(db: SQLiteDatabase, block: () -> Unit) {
+        db.beginTransaction()
+        try {
+            block()
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    private fun scalar(db: SQLiteDatabase, sql: String): Int = db.rawQuery(sql, null).use {
+        check(it.moveToFirst())
+        it.getInt(0)
     }
 
     private fun Item.toJson(): JSONObject = JSONObject().apply {

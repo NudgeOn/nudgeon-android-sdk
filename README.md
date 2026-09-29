@@ -182,9 +182,18 @@ override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(
 
 ## 아키텍처 (iOS와 대칭)
 
-- 코어가 유일한 상태 보유자: SharedPreferences 식별자 영속, 파일 오프라인 큐(1000건 상한),
+- 코어가 유일한 상태 보유자: SharedPreferences 식별자 영속, SQLite 오프라인 큐(1000건 상한),
   단일 워커 스레드 배치 플러시, 토큰 대사(S-5).
 - 모듈: `Identity`·`EventQueue`·`Network`·`PushPayload`·`PushManager`·`EventBus`·`NudgeOnCore`.
+
+## SQLite 이벤트 큐 (다음 릴리스 소스)
+
+- `track()`으로 저장한 이벤트를 SQLite의 `nudgeon_events.sqlite`에 보관합니다. `track()`·`flush()`의 공개 API와 배치 전송 설정은 동일합니다. DB 열기와 이전 작업은 SDK 워커에서 실행합니다.
+- 기존 `nudgeon_events.json`은 첫 접근 시 트랜잭션으로 이전합니다. 이벤트와 이전 완료 마커를 함께 커밋한 뒤 JSON 파일을 삭제하므로, 파일 삭제 전에 앱이 종료돼도 이미 처리한 이벤트가 다시 복원되지 않습니다.
+- 저장 순서, `insert_id`, 발생 시각과 사용자 식별자를 유지합니다. 전송 성공 후 해당 ID만 삭제하며, 전송 실패 시 다음 flush에서 재시도합니다. 서버 수신 후 로컬 삭제 전에 앱이 종료되면 같은 ID로 재전송할 수 있습니다.
+- 최대 1,000건을 유지하고 초과 시 가장 오래된 이벤트를 삭제합니다. 디스크 부족·DB 손상·잘못된 이전 파일에서는 경고를 남기고 저장 실패를 처리하며, 기존 DB나 JSON을 자동 초기화하지 않습니다. 이 상태에서 새 이벤트의 저장은 보장되지 않습니다. 문제 해결 후 다음 큐 접근에서 다시 시도합니다.
+- 기존 JSON만 읽는 구버전 SDK로 내려가면 SQLite에 남아 있는 이벤트를 읽을 수 없습니다. 다운그레이드 전 큐를 비우세요.
+- RN·Flutter는 네이티브 큐를 사용합니다. 배포된 구버전 의존성에는 이 변경이 포함되지 않으므로, 새 네이티브 코어 출시 후 각 브리지의 고정 버전을 갱신해야 합니다.
 
 ## 로드맵
 

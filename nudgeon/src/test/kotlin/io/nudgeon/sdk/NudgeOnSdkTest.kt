@@ -84,8 +84,11 @@ class EventBusTest {
     }
 }
 
+@org.robolectric.annotation.SQLiteMode(org.robolectric.annotation.SQLiteMode.Mode.NATIVE)
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(manifest = org.robolectric.annotation.Config.NONE, sdk = [35])
 class EventQueueTest {
-    private fun tempFile() = File.createTempFile("nudgeon_${UUID.randomUUID()}", ".json").apply { deleteOnExit() }
+    private fun tempFile() = File.createTempFile("nudgeon_${UUID.randomUUID()}", ".json").apply { delete(); deleteOnExit() }
 
     @Test fun enqueuePeekAck() {
         val q = EventQueue(tempFile())

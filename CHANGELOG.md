@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Replace the JSON event queue with a transactional SQLite FIFO; retain the 1,000-event oldest-drop policy and existing tracking/flush APIs.
+- Import legacy events and a migration marker in one transaction; never replay acknowledged events when legacy file cleanup fails.
+- Preserve existing storage on database/migration errors and retry on subsequent access; storage failures do not crash the host app.
+- Add real-SQLite regression coverage for reopen, migration rollback, acknowledgement rollback, capacity, nested properties, concurrent connections and corruption.
+
 ## 0.2.8 — 2026-09-22
 
 - Preserve explicit JSON null in profile attribute requests so unset operations reach the server.

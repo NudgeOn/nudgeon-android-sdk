@@ -11,6 +11,9 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 
+@org.robolectric.annotation.SQLiteMode(org.robolectric.annotation.SQLiteMode.Mode.NATIVE)
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(manifest = org.robolectric.annotation.Config.NONE, sdk = [35])
 class StandardEventsTest {
     @Test fun standardNamesSurviveOfflineStorageAndTrackTransport() {
         val names = listOf(NudgeOnEvents.SIGN_UP, NudgeOnEvents.LOGIN,
@@ -18,7 +21,7 @@ class StandardEventsTest {
             NudgeOnEvents.ADD_TO_CART, NudgeOnEvents.CHECKOUT_STARTED, "purchase")
         val expected = listOf("sign_up", "login", "purchase_completed", "product_viewed",
             "add_to_cart", "checkout_started", "purchase")
-        val file = File.createTempFile("nudgeon-standard-events", ".json")
+        val file = File.createTempFile("nudgeon-standard-events", ".json").apply { delete() }
         val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
         val serverExecutor = Executors.newSingleThreadExecutor()
         val io = Executors.newSingleThreadExecutor()

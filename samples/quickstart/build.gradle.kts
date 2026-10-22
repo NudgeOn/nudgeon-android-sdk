@@ -38,7 +38,7 @@ kotlin {
 
 dependencies {
     // 핵심 — 로컬 모듈이 아니라 Maven Central에 게시된 아티팩트를 쓴다.
-    implementation("io.nudgeon:nudgeon-sdk:0.1.2")
+    implementation("io.nudgeon:nudgeon-sdk:0.2.9")
 
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
